@@ -37,6 +37,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
 
 import static io.cucumber.core.exception.ExceptionUtils.printStackTrace;
 import static java.util.Collections.emptyList;
+import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 
 /**
@@ -77,6 +80,9 @@ public class TeamCityPlugin implements EventListener {
             + "[testFinished timestamp = '%s' duration = '%s' name = '%s']";
     private static final String TEMPLATE_TEST_FAILED = TEAMCITY_PREFIX
             + "[testFailed timestamp = '%s' duration = '%s' message = '%s' details = '%s' name = '%s']";
+
+    private static final String TEMPLATE_TEST_COMPARISON_FAILED = TEAMCITY_PREFIX
+            + "[testFailed timestamp = '%s' duration = '%s' message = '%s' details = '%s' expected = '%s' actual = '%s' name = '%s']";
     private static final String TEMPLATE_TEST_IGNORED = TEAMCITY_PREFIX
             + "[testIgnored timestamp = '%s' duration = '%s' message = '%s' name = '%s']";
 
@@ -101,6 +107,24 @@ public class TeamCityPlugin implements EventListener {
     private static final Pattern ANNOTATION_GLUE_CODE_LOCATION_PATTERN = Pattern.compile("^(.*)\\.(.*)\\([^:]*\\)");
     private static final Pattern LAMBDA_GLUE_CODE_LOCATION_PATTERN = Pattern.compile("^(.*)\\.(.*)\\(.*:.*\\)");
 
+    private static final Pattern[] COMPARE_PATTERNS = new Pattern[] {
+            // Hamcrest 2 MatcherAssert.assertThat
+            Pattern.compile("expected: (.*)(?:\r\n|\r|\n) {5}but: was (.*)$",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE),
+            // AssertJ 3 ShouldBeEqual.smartErrorMessage
+            Pattern.compile("expected: (.*)(?:\r\n|\r|\n) but was: (.*)$",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE),
+            // JUnit 5 AssertionFailureBuilder
+            Pattern.compile("expected: <(.*)> but was: <(.*)>$",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE),
+            // JUnit 4 Assert.assertEquals
+            Pattern.compile("expected:\\s?<(.*)> but was:\\s?<(.*)>$",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE),
+            // TestNG 7 Assert.assertEquals
+            Pattern.compile("expected \\[(.*)] but found \\[(.*)]\n$",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE),
+    };
+
     private final PrintStream out;
     private final List<SnippetsSuggestedEvent> suggestions = new ArrayList<>();
     private final Map<URI, Collection<Node>> parsedTestSources = new HashMap<>();
@@ -109,9 +133,10 @@ public class TeamCityPlugin implements EventListener {
 
     @SuppressWarnings("unused") // Used by PluginFactory
     public TeamCityPlugin() {
-        // This plugin prints markers for Team City and IDEA that allows them
-        // associate the output to specific test cases. Printing to system out
-        // - and potentially mixing with other formatters - is intentional.
+        // This plugin prints markers for Team City and IntelliJ IDEA that
+        // allows them to associate the output to specific test cases. Printing
+        // to system out - and potentially mixing with other formatters - is
+        // intentional.
         this(System.out);
     }
 
@@ -228,18 +253,31 @@ public class TeamCityPlugin implements EventListener {
             PickleStepTestStep pickleStepTestStep = (PickleStepTestStep) testStep;
             return pickleStepTestStep.getUri() + ":" + pickleStepTestStep.getStep().getLine();
         }
-        return extractSourceLocation(testStep);
+        if (testStep instanceof HookTestStep) {
+            return formatHookStepLocation(
+                (HookTestStep) testStep,
+                javaTestLocationUri(),
+                TestStep::getCodeLocation);
+        }
+        return testStep.getCodeLocation();
     }
 
-    private String extractSourceLocation(TestStep testStep) {
+    private static BiFunction<String, String, String> javaTestLocationUri() {
+        return (fqDeclaringClassName, classOrMethodName) -> String.format("java:test://%s/%s", fqDeclaringClassName,
+            classOrMethodName);
+    }
 
-        Matcher javaMatcher = ANNOTATION_GLUE_CODE_LOCATION_PATTERN.matcher(testStep.getCodeLocation());
+    private String formatHookStepLocation(
+            HookTestStep hookTestStep, BiFunction<String, String, String> hookStepCase,
+            Function<HookTestStep, String> defaultHookName
+    ) {
+        Matcher javaMatcher = ANNOTATION_GLUE_CODE_LOCATION_PATTERN.matcher(hookTestStep.getCodeLocation());
         if (javaMatcher.matches()) {
             String fqDeclaringClassName = javaMatcher.group(1);
             String methodName = javaMatcher.group(2);
-            return String.format("java:test://%s/%s", fqDeclaringClassName, methodName);
+            return hookStepCase.apply(fqDeclaringClassName, methodName);
         }
-        Matcher java8Matcher = LAMBDA_GLUE_CODE_LOCATION_PATTERN.matcher(testStep.getCodeLocation());
+        Matcher java8Matcher = LAMBDA_GLUE_CODE_LOCATION_PATTERN.matcher(hookTestStep.getCodeLocation());
         if (java8Matcher.matches()) {
             String fqDeclaringClassName = java8Matcher.group(1);
             String declaringClassName;
@@ -249,10 +287,9 @@ public class TeamCityPlugin implements EventListener {
             } else {
                 declaringClassName = fqDeclaringClassName;
             }
-            return String.format("java:test://%s/%s", fqDeclaringClassName, declaringClassName);
+            return hookStepCase.apply(fqDeclaringClassName, declaringClassName);
         }
-
-        return testStep.getCodeLocation();
+        return defaultHookName.apply(hookTestStep);
     }
 
     private void printTestStepFinished(TestStepFinished event) {
@@ -281,7 +318,18 @@ public class TeamCityPlugin implements EventListener {
             case AMBIGUOUS:
             case FAILED: {
                 String details = printStackTrace(error);
-                print(TEMPLATE_TEST_FAILED, timeStamp, duration, "Step failed", details, name);
+                String message = error.getMessage();
+                if (message == null) {
+                    print(TEMPLATE_TEST_FAILED, timeStamp, duration, "Step failed", details, name);
+                    break;
+                }
+                ComparisonFailure comparisonFailure = ComparisonFailure.parse(message.trim());
+                if (comparisonFailure == null) {
+                    print(TEMPLATE_TEST_FAILED, timeStamp, duration, "Step failed", details, name);
+                    break;
+                }
+                print(TEMPLATE_TEST_COMPARISON_FAILED, timeStamp, duration, "Step failed", details,
+                    comparisonFailure.getExpected(), comparisonFailure.getActual(), name);
                 break;
             }
             default:
@@ -290,28 +338,40 @@ public class TeamCityPlugin implements EventListener {
         print(TEMPLATE_TEST_FINISHED, timeStamp, duration, name);
     }
 
-    private String extractName(TestStep step) {
-        if (step instanceof PickleStepTestStep) {
-            PickleStepTestStep pickleStepTestStep = (PickleStepTestStep) step;
+    private String getHookName(HookTestStep hook) {
+        HookType hookType = hook.getHookType();
+        switch (hookType) {
+            case BEFORE:
+                return "Before";
+            case AFTER:
+                return "After";
+            case BEFORE_STEP:
+                return "BeforeStep";
+            case AFTER_STEP:
+                return "AfterStep";
+            default:
+                return hookType.name().toLowerCase(Locale.US);
+        }
+    }
+
+    private String extractName(TestStep testStep) {
+        if (testStep instanceof PickleStepTestStep) {
+            PickleStepTestStep pickleStepTestStep = (PickleStepTestStep) testStep;
             return pickleStepTestStep.getStep().getText();
         }
-        if (step instanceof HookTestStep) {
-            HookTestStep hook = (HookTestStep) step;
-            HookType hookType = hook.getHookType();
-            switch (hookType) {
-                case BEFORE:
-                    return "Before";
-                case AFTER:
-                    return "After";
-                case BEFORE_STEP:
-                    return "BeforeStep";
-                case AFTER_STEP:
-                    return "AfterStep";
-                default:
-                    return hookType.name().toLowerCase(Locale.US);
-            }
+        if (testStep instanceof HookTestStep) {
+            HookTestStep hookTestStep = (HookTestStep) testStep;
+            return formatHookStepLocation(
+                hookTestStep,
+                hookNameFormat(hookTestStep),
+                this::getHookName);
         }
         return "Unknown step";
+    }
+
+    private BiFunction<String, String, String> hookNameFormat(HookTestStep hookTestStep) {
+        return (fqDeclaringClassName, classOrMethodName) -> String.format("%s(%s)", getHookName(hookTestStep),
+            classOrMethodName);
     }
 
     private String getSnippets(TestCase testCase) {
@@ -420,4 +480,43 @@ public class TeamCityPlugin implements EventListener {
                 .replace("]", "|]");
     }
 
+    private static class ComparisonFailure {
+
+        static ComparisonFailure parse(String message) {
+            for (Pattern pattern : COMPARE_PATTERNS) {
+                ComparisonFailure result = parse(message, pattern);
+                if (result != null) {
+                    return result;
+                }
+            }
+            return null;
+        }
+
+        static ComparisonFailure parse(String message, Pattern pattern) {
+            final Matcher matcher = pattern.matcher(message);
+            if (!matcher.find()) {
+                return null;
+            }
+            String expected = matcher.group(1);
+            String actual = matcher.group(2);
+            return new ComparisonFailure(expected, actual);
+        }
+
+        private final String expected;
+
+        private final String actual;
+
+        ComparisonFailure(String expected, String actual) {
+            this.expected = requireNonNull(expected);
+            this.actual = requireNonNull(actual);
+        }
+
+        public String getExpected() {
+            return expected;
+        }
+
+        public String getActual() {
+            return actual;
+        }
+    }
 }

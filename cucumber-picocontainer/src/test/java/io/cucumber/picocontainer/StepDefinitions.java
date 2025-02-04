@@ -1,7 +1,9 @@
 package io.cucumber.picocontainer;
 
 import io.cucumber.java.After;
+import io.cucumber.java.AfterAll;
 import io.cucumber.java.Before;
+import io.cucumber.java.BeforeAll;
 import io.cucumber.java.Scenario;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -12,10 +14,13 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StepDefinitions {
 
     private final DisposableCucumberBelly belly;
+    private static int scenarioCount = 0;
 
     public StepDefinitions(DisposableCucumberBelly belly) {
         this.belly = belly;
@@ -35,9 +40,37 @@ public class StepDefinitions {
 
     @After
     public void after() {
+        scenarioCount++;
         // We might need to clean up the belly here, if it represented an
         // external resource.
-        assert !belly.isDisposed();
+
+        // Call order should be Started > After > Stopped > Disposed, so here we
+        // expect only Started
+        assertTrue(belly.wasStarted());
+        assertFalse(belly.wasStopped());
+        assertFalse(belly.isDisposed());
+    }
+
+    @BeforeAll
+    @SuppressWarnings("unused")
+    public static void beforeAll() {
+        // reset static variables
+        DisposableCucumberBelly.events.clear();
+        scenarioCount = 0;
+    }
+
+    @AfterAll
+    @SuppressWarnings("unused")
+    public static void afterAll() {
+        List<String> events = DisposableCucumberBelly.events;
+        // Call order should be Start > Stopped > Disposed, for each test
+        // scenario
+        assertEquals(3 * scenarioCount, events.size());
+        for (int i = 0; i < scenarioCount; i += 3) {
+            assertEquals("Started", events.get(i));
+            assertEquals("Stopped", events.get(i + 1));
+            assertEquals("Disposed", events.get(i + 2));
+        }
     }
 
     @Given("I have {int} {word} in my belly")

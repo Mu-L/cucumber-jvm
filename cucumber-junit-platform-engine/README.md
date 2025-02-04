@@ -1,15 +1,15 @@
 Cucumber JUnit Platform Engine
 ==============================
 
-Use JUnit Platform to execute Cucumber scenarios.
+Use the JUnit (5) Platform to execute Cucumber scenarios.
 
-Add the `cucumber-junit-platform-engine` dependency to your `pom.xml`:
+Add the `cucumber-junit-platform-engine` dependency to your `pom.xml` and use
+the [`cucumber-bom`](../cucumber-bom/README.md) for dependency management:
 
 ```xml
 <dependency>
    <groupId>io.cucumber</groupId>
    <artifactId>cucumber-junit-platform-engine</artifactId>
-   <version>${cucumber.version}</version>
    <scope>test</scope>
 </dependency>
 ```
@@ -17,34 +17,54 @@ Add the `cucumber-junit-platform-engine` dependency to your `pom.xml`:
 This will allow IntelliJ IDEA, Eclipse, Maven, Gradle, etc, to discover, select
 and execute Cucumber scenarios.
 
-## Surefire and Gradle workarounds
+## Running Cucumber
+
+The JUnit Platform provides a single interface for tools and IDE's to discover,
+select and execute tests from different test engines. Conceptually this looks
+like this:
+
+
+```mermaid
+erDiagram
+    "IDE, Maven, Gradle or Console Launcher" ||--|{ "JUnit Platform" : "requests discovery and execution"
+    "Console Launcher" ||--|{ "JUnit Platform" : "requests discovery and execution"
+    "JUnit Platform" ||--|{ "Cucumber Test Engine": "forwards request"
+    "JUnit Platform" ||--|{ "Jupiter Test Engine": "forwards request"
+    "Cucumber Test Engine" ||--|{ "Feature Files": "discovers and executes"
+    "Jupiter Test Engine" ||--|{ "Test Classes": "discovers and executes"
+```
+
+
+### Maven Surefire and Gradle
 
 Maven Surefire and Gradle do not yet support discovery of non-class based tests
 (see: [gradle/#4773](https://github.com/gradle/gradle/issues/4773),
 [SUREFIRE-1724](https://issues.apache.org/jira/browse/SUREFIRE-1724)). As a
-workaround you can either use the
-[JUnit Platform Suite Engine](https://junit.org/junit5/docs/current/user-guide/#junit-platform-suite-engine) 
-or the [JUnit Platform Console Launcher](https://junit.org/junit5/docs/current/user-guide/#running-tests-console-launcher).
+ workaround, you can either use:
+ * the [JUnit Platform Suite Engine](https://junit.org/junit5/docs/current/user-guide/#junit-platform-suite-engine);
+ * the [JUnit Platform Console Launcher](https://junit.org/junit5/docs/current/user-guide/#running-tests-console-launcher) or;
+ * the [Gradle Cucumber-Companion](https://github.com/gradle/cucumber-companion) plugins for Gradle and Maven.
+ * the [Cucable](https://github.com/trivago/cucable-plugin) plugin for Maven.
 
-### Use the JUnit Platform Suite Engine
+#### Use the JUnit Platform Suite Engine
 
 The JUnit Platform Suite Engine can be used to run Cucumber. See
 [Suites with different configurations](#suites-with-different-configurations)
 for a brief how to.
 
-Because Surefire and Gradle reports the results in  a `<Class Name> - <Method Name>`
-format only scenario names or example numbers are reported. This
+Because Surefire and Gradle reports provide the results in a `<Class Name> - <Method Name>`
+format, only scenario names or example numbers are reported. This
 can make for hard to read reports. To improve the readability of the reports
 provide the `cucumber.junit-platform.naming-strategy=long` configuration
-parameter. This will include the feature name as part of the tests name. 
+parameter. This will include the feature name as part of the test name. 
 
-#### Maven
+##### Maven
 
 ```xml
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
     <artifactId>maven-surefire-plugin</artifactId>
-    <version>3.0.0-M5</version>
+    <version>3.2.5</version>
     <configuration>
         <properties>
             <configurationParameters>
@@ -55,7 +75,7 @@ parameter. This will include the feature name as part of the tests name.
 </plugin>
 ```            
 
-#### Gradle
+##### Gradle
 
 ```kotlin
 tasks.test {
@@ -64,12 +84,12 @@ tasks.test {
 }
 ```
 
-### Use the JUnit Console Launcher ###
+#### Use the JUnit Console Launcher ###
 
 You can integrate the JUnit Platform Console Launcher in your build by using 
 either the Maven Antrun plugin or the Gradle JavaExec task.
 
-#### Use the Maven Antrun plugin  ####
+##### Use the Maven Antrun plugin  ####
 
 Add the following to your `pom.xml`:
 
@@ -119,7 +139,7 @@ Add the following to your `pom.xml`:
 </plugins>
 </build>
 ```
-#### Use the Gradle JavaExec task  ####
+##### Use the Gradle JavaExec task  ####
 
 Add the following to your `build.gradle.kts`:
 
@@ -144,55 +164,114 @@ tasks {
 }
 ```
 
+### Running a single scenario or feature from the CLI
+
+To select a single scenario or feature the `cucumber.features` property can be
+used. Because this property will cause Cucumber to ignore any other selectors
+from JUnit, it is prudent to execute only the Cucumber engine.
+
+#### Maven
+
+To select the scenario on line 10 of the `example.feature` file use:
+
+```shell
+mvn test -Dsurefire.includeJUnit5Engines=cucumber -Dcucumber.plugin=pretty -Dcucumber.features=path/to/example.feature:10 
+```
+
+#### Gradle
+
+TODO: (I don't know how. Feel free to send a pull request. ;))
+
 ## Suites with different configurations
 
 The JUnit Platform Suite Engine can be used to run Cucumber multiple times with
-different configurations. Add the `junit-platform-suite` dependency:
+different configurations. Conceptually this looks like this:
+
+```mermaid
+erDiagram
+    "IDE, Maven, Gradle or Console Launcher" ||--|{ "JUnit Platform" : "requests discovery and execution"
+    "JUnit Platform" ||--|{ "Suite Test Engine": "forwards request"
+    "Suite Test Engine" ||--|{ "@Suite annotated class A" : "discovers and executes"
+    "Suite Test Engine" ||--|{ "@Suite annotated class B" : "discovers and executes"
+        
+    "@Suite annotated class A" ||--|{ "JUnit Platform (A)" :  "requests discovery and execution"
+    "@Suite annotated class B" ||--|{ "JUnit Platform (B)" :  "requests discovery and execution"
+    "JUnit Platform (A)" ||--|{ "Cucumber Test Engine (A)": "forwards request"
+    "JUnit Platform (B)" ||--|{ "Cucumber Test Engine (B)": "forwards request"
+    "Cucumber Test Engine (A)" ||--|{ "Feature Files (A)": "discovers and executes"
+    "Cucumber Test Engine (B)" ||--|{ "Feature Files (B)": "discovers and executes"
+```
+
+To use, add the `junit-platform-suite` dependency and use
+the [`junit-bom`](https://junit.org/junit5/docs/current/user-guide/#running-tests-build-maven-bom) for dependency management:
 
 ```xml
 <dependency>
    <groupId>org.junit.platform</groupId>
    <artifactId>junit-platform-suite</artifactId>
-   <version>${junit-platform.version}</version>
    <scope>test</scope>
 </dependency>
 ```
 
-Then define suites as needed:
+Then define suites as needed using the annotation from the
+[`org.junit.platform.suite.api`](https://junit.org/junit5/docs/current/api/org.junit.platform.suite.api/org/junit/platform/suite/api/package-summary.html)
+package:
 
 ```java
 package com.example;
 
 import org.junit.platform.suite.api.ConfigurationParameter;
 import org.junit.platform.suite.api.IncludeEngines;
-import org.junit.platform.suite.api.SelectClasspathResource;
+import org.junit.platform.suite.api.SelectPackages;
 import org.junit.platform.suite.api.Suite;
 
 import static io.cucumber.junit.platform.engine.Constants.GLUE_PROPERTY_NAME;
 
 @Suite
 @IncludeEngines("cucumber")
-@SelectClasspathResource("com/example")
+@SelectPackages("com.example")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "com.example")
 public class RunCucumberTest {
 }
 ```
 
+
+
 ## Parallel execution ## 
 
-By default, Cucumber runs tests sequentially in a single thread. Running  tests
+By default, Cucumber runs tests sequentially in a single thread. Running tests
 in parallel is available as an opt-in feature. To enable parallel execution, set
 the `cucumber.execution.parallel.enabled` configuration parameter to `true`,
-e.g. in `junit-platform.properties`.
+e.g., in `junit-platform.properties`.
 
-Cucumber supports JUnit's `ParallelExecutionConfigurationStrategy`; see the 
-configuration options below.
+To control properties such as the desired parallelism and maximum parallelism,
+Cucumber supports JUnit 5s `ParallelExecutionConfigurationStrategy`. Cucumber
+provides two implementations: `dynamic` and `fixed` that can be set through
+`cucumber.execution.parallel.config.strategy`. You may also implement a `custom`
+strategy.
+
+* `dynamic`: Computes the desired parallelism as `<available cores>` * 
+`cucumber.execution.parallel.config.dynamic.factor`.
+
+* `fixed`: Set `cucumber.execution.parallel.config.fixed.parallelism` to the
+  desired parallelism and `cucumber.execution.parallel.config.fixed.max-pool-size`
+  to the maximum pool size of the underlying ForkJoin pool.
+
+* `custom`: Specify a custom `ParallelExecutionConfigurationStrategy`
+implementation through `cucumber.execution.parallel.config.custom.class`.  
+
+If no strategy is specified Cucumber will use the `dynamic` strategy with a
+factor of `1`.
+
+Note: While `.fixed.max-pool-size` effectively limits the maximum number of
+concurrent threads, Cucumber does not guarantee that the number of concurrently
+executing scenarios will not exceed this. See [junit5/#3108](https://github.com/junit-team/junit5/issues/3108)
+for details.
 
 ### Exclusive Resources ###
 
-The JUnit Platform supports parallel execution. To avoid flaky tests when
-multiple scenarios manipulate the same resource, tests can be
-[synchronized][junit5-user-guide-synchronization] on that resource.
+To avoid flaky tests when multiple scenarios manipulate the same resource, tests
+can be [synchronized][junit5-user-guide-synchronization] on that resource.
 
 [junit5-user-guide-synchronization]: https://junit.org/junit5/docs/current/user-guide/#writing-tests-parallel-execution-synchronization
 
@@ -269,88 +348,125 @@ with this configuration:
 ```properties
 cucumber.execution.exclusive-resources.isolated.read-write=org.junit.platform.engine.support.hierarchical.ExclusiveResource.GLOBAL_KEY
 ```
+### Executing features in parallel 
+
+By default, when parallel execution is enabled, scenarios and examples are
+executed in parallel. Due to limitations, JUnit 4 could only execute features in
+parallel. This behaviour can be restored by setting the configuration parameter
+`cucumber.execution.execution-mode.feature` to `same_thread`. 
 
 ## Configuration Options ##
 
 Cucumber receives its configuration from the JUnit Platform. To see how these can be supplied; see the JUnit
 documentation
 [4.5. Configuration Parameters](https://junit.org/junit5/docs/current/user-guide/#running-tests-config-params). For 
-documentation on Cucumber properties see [Constants](src/main/java/io/cucumber/junit/platform/engine/Constants.java).
+documentation on Cucumber properties, see [Constants](src/main/java/io/cucumber/junit/platform/engine/Constants.java).
 
 ```
-cucumber.ansi-colors.disabled=                                # true or false. 
-                                                              # default: false                     
-      
-cucumber.filter.name=                                         # a regular expression.
-                                                              # only scenarios with matching names are executed.
-                                                              # example: ^Hello (World|Cucumber)$
-                                                              # note: To ensure consistent reports between Cucumber and
-                                                              # JUnit 5 prefer using JUnit 5s discovery request filters
-                                                              # or JUnit 5 tag expressions instead.
+cucumber.ansi-colors.disabled=                                 # true or false. 
+                                                               # default: false                     
+       
+cucumber.filter.name=                                          # a regular expression.
+                                                               # only scenarios with matching names are executed.
+                                                               # combined with cucumber.filter.tags using "and" semantics.
+                                                               # example: ^Hello (World|Cucumber)$
+                                                               # note: To ensure consistent reports between Cucumber and
+                                                               # JUnit 5 prefer using JUnit 5s discovery request filters
+                                                               # or JUnit 5 tag expressions instead.
 
-cucumber.features=                                            # comma separated paths to feature files. 
-                                                              # example: path/to/example.feature, path/to/other.feature
-                                                              # note: When used any discovery selectors from the JUnit
-                                                              # Platform will be ignored. Use with caution and care.
+cucumber.features=                                             # comma separated paths to feature files. 
+                                                               # example: path/to/example.feature, path/to/other.feature
+                                                               # note: When used any discovery selectors from the JUnit
+                                                               # Platform will be ignored. This may lead to multiple
+                                                               # executions of Cucumber. For example when used in
+                                                               # combination with the JUnit Platform Suite Engine.
+                                                               # When using Cucumber through the JUnit Platform
+                                                               # Launcher API or the JUnit Platform Suite Engine, it is
+                                                               # recommended to use JUnit's DiscoverySelectors or 
+                                                               # Junit Platform Suite annotations.
 
-cucumber.filter.tags=                                         # a cucumber tag expression.
-                                                              # only scenarios with matching tags are executed.
-                                                              # example: @Cucumber and not (@Gherkin or @Zucchini)
-                                                              # note: To ensure consistent reports between Cucumber and
-                                                              # JUnit 5 prefer using JUnit 5s discovery request filters
-                                                              # or JUnit 5 tag expressions instead.
+cucumber.filter.tags=                                          # a cucumber tag expression.
+                                                               # only scenarios with matching tags are executed.
+                                                               # combined with cucumber.filter.name using "and" semantics.                                                               
+                                                               # example: @Cucumber and not (@Gherkin or @Zucchini)
+                                                               # note: To ensure consistent reports between Cucumber and
+                                                               # JUnit 5 prefer using JUnit 5s discovery request filters
+                                                               # or JUnit 5 tag expressions instead.
 
-cucumber.glue=                                                # comma separated package names.
-                                                              # example: com.example.glue  
+cucumber.glue=                                                 # comma separated package names.
+                                                               # example: com.example.glue  
 
-cucumber.junit-platform.naming-strategy=                      # long or short.
-                                                              # default: short
-                                                              # include parent descriptor name in test descriptor.
+cucumber.junit-platform.naming-strategy=                       # long or short.
+                                                               # default: short
+                                                               # include parent descriptor name in test descriptor.
 
-cucumber.plugin=                                              # comma separated plugin strings.
-                                                              # example: pretty, json:path/to/report.json
+cucumber.junit-platform.naming-strategy.short.example-name=    # number or pickle.
+                                                               # default: number
+                                                               # Use example number or pickle name for examples when
+                                                               # short naming strategy is used
 
-cucumber.object-factory=                                      # object factory class name.
-                                                              # example: com.example.MyObjectFactory
+cucumber.junit-platform.naming-strategy.long.example-name=     # number or pickle.
+                                                               # default: number
+                                                               # Use example number or pickle name for examples when
+                                                               # long naming strategy is used
 
-cucumber.publish.enabled                                      # true or false. 
-                                                              # default: false
-                                                              # enable publishing of test results
+cucumber.plugin=                                               # comma separated plugin strings.
+                                                               # example: pretty, json:path/to/report.json
 
-cucumber.publish.quiet                                        # true or false. 
-                                                              # default: false
-                                                              # suppress publish banner after test execution.
+cucumber.uuid-generator                                        # uuid generator class name of a registered service provider.
+                                                               # default: io.cucumber.core.eventbus.RandomUuidGenerator
+                                                               # example: com.example.MyUuidGenerator
+ 
+cucumber.object-factory=                                       # object factory class name.
+                                                               # example: com.example.MyObjectFactory
 
-cucumber.publish.token                                        # any string value.
-                                                              # publish authenticated test results.
+cucumber.publish.enabled                                       # true or false. 
+                                                               # default: false
+                                                               # enable publishing of test results
 
-cucumber.snippet-type=                                        # underscore or camelcase.
-                                                              # default: underscore
+cucumber.publish.quiet                                         # true or false. 
+                                                               # default: false
+                                                               # suppress publish banner after test execution.
 
-cucumber.execution.dry-run=                                   # true or false.
-                                                              # default: false
+cucumber.publish.token                                         # any string value.
+                                                               # publish authenticated test results.
 
-cucumber.execution.parallel.enabled=                          # true or false.
-                                                              # default: false
+cucumber.snippet-type=                                         # underscore or camelcase.
+                                                               # default: underscore
 
-cucumber.execution.parallel.config.strategy=                  # dynamic, fixed or custom.
-                                                              # default: dynamic
+cucumber.execution.dry-run=                                    # true or false.
+                                                               # default: false
 
-cucumber.execution.parallel.config.fixed.parallelism=         # positive integer.
-                                                              # example: 4
+cucumber.execution.execution-mode.feature=                     # same_thread or concurrent
+                                                               # default: concurrent
+                                                               # same_thread - executes scenarios sequentially in the 
+                                                               # same thread as the parent feature 
+                                                               # concurrent - executes scenarios concurrently on any
+                                                               # available thread
 
-cucumber.execution.parallel.config.dynamic.factor=            # positive double.
-                                                              # default: 1.0
+cucumber.execution.parallel.enabled=                           # true or false.
+                                                               # default: false
 
-cucumber.execution.parallel.config.custom.class=              # class name.
-                                                              # example: com.example.MyCustomParallelStrategy
+cucumber.execution.parallel.config.strategy=                   # dynamic, fixed or custom.
+                                                               # default: dynamic
 
-cucumber.execution.exclusive-resources.<tag-name>.read-write= # a comma separated list of strings
-                                                              # example: resource-a, resource-b.
+cucumber.execution.parallel.config.fixed.parallelism=          # positive integer.
+                                                               # example: 4
 
-cucumber.execution.exclusive-resources.<tag-name>.read=       # a comma separated list of strings
-                                                              # example: resource-a, resource-b
+cucumber.execution.parallel.config.fixed.max-pool-size=        # positive integer.
+                                                               # example: 4
 
+cucumber.execution.parallel.config.dynamic.factor=             # positive double.
+                                                               # default: 1.0
+
+cucumber.execution.parallel.config.custom.class=               # class name.
+                                                               # example: com.example.MyCustomParallelStrategy
+
+cucumber.execution.exclusive-resources.<tag-name>.read-write=  # a comma separated list of strings
+                                                               # example: resource-a, resource-b.
+
+cucumber.execution.exclusive-resources.<tag-name>.read=        # a comma separated list of strings
+                                                               # example: resource-a, resource-b
 ```
 
 ## Supported Discovery Selectors and Filters ## 
@@ -434,7 +550,7 @@ for more information.
 ## Aborting Tests
 
 Cucumber supports [OpenTest4Js](https://github.com/ota4j-team/opentest4j)
-`TestAbortedException`. This makes it possible to use JUnit Jupiters
+`TestAbortedException`. This makes it possible to use JUnit Jupiter's
 `Assumptions` to abort rather than fail a scenario.
 
 ```java
@@ -458,7 +574,46 @@ public class RpnCalculatorSteps {
 ## Rerunning Failed Scenarios ##
 
 When using `cucumber-junit-platform-engine` rerun files are not supported.
-However, the JUnit Platform allows you to rerun failed tests through its API.
+Use either Maven, Gradle or the JUnit Platform Launcher API.
+
+### Using Maven
+
+When running Cucumber through the [JUnit Platform Suite Engine](use-the-jUnit-platform-suite-engine)
+use [`rerunFailingTestsCount`](https://maven.apache.org/surefire/maven-surefire-plugin/examples/rerun-failing-tests.html).
+
+Note: any files written by Cucumber will be overwritten during the rerun.
+
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-surefire-plugin</artifactId>
+    <version>3.2.5</version>
+    <configuration>
+        <rerunFailingTestsCount>2</rerunFailingTestsCount>
+        <properties>
+            <!-- Work around. Surefire does not include enough
+                 information to disambiguate between different
+                 examples and scenarios. -->
+            <configurationParameters>
+                cucumber.junit-platform.naming-strategy=long
+            </configurationParameters>
+        </properties>
+    </configuration>
+</plugin>
+```
+
+### Using Gradle.
+
+Gradle support for JUnit 5 is rather limited 
+[gradle#4773](https://github.com/gradle/gradle/issues/4773), 
+[junit5#2849](https://github.com/junit-team/junit5/issues/2849).
+As a workaround you can the [Gradle Cucumber-Companion](https://github.com/gradle/cucumber-companion)
+plugin in combination with [Gradle Test Retry](https://github.com/gradle/test-retry-gradle-plugin)
+plugin.
+
+Note: any files written by Cucumber will be overwritten while retrying.
+
+### Using the JUnit Platform Launcher API
 
 ```java
 package com.example;
@@ -470,6 +625,7 @@ import org.junit.platform.launcher.LauncherDiscoveryRequest;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.core.LauncherFactory;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
+import org.junit.platform.launcher.listeners.TestExecutionSummary;
 import org.junit.platform.launcher.listeners.TestExecutionSummary.Failure;
 
 import java.util.List;
@@ -511,7 +667,6 @@ public class RunCucumber {
 
       TestExecutionSummary rerunSummary = listener.getSummary();
       // Do something with rerunSummary
-
    }
 
 }

@@ -1,6 +1,7 @@
 package io.cucumber.core.options;
 
 import io.cucumber.core.backend.ObjectFactory;
+import io.cucumber.core.eventbus.UuidGenerator;
 import io.cucumber.core.exception.CucumberException;
 import io.cucumber.core.feature.FeatureWithLines;
 import io.cucumber.core.feature.GluePath;
@@ -8,11 +9,8 @@ import io.cucumber.core.snippets.SnippetType;
 import io.cucumber.tagexpressions.TagExpressionException;
 import io.cucumber.tagexpressions.TagExpressionParser;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.regex.Pattern;
 
-import static io.cucumber.core.options.OptionsFileParser.parseFeatureWithLinesFile;
 import static io.cucumber.core.resource.ClasspathSupport.CLASSPATH_SCHEME_PREFIX;
 import static java.util.Objects.requireNonNull;
 
@@ -45,6 +43,7 @@ public final class CucumberOptionsAnnotationParser {
                 addGlue(options, args);
                 addFeatures(options, args);
                 addObjectFactory(options, args);
+                addUuidGenerator(options, args);
             }
         }
 
@@ -131,13 +130,9 @@ public final class CucumberOptionsAnnotationParser {
     private void addFeatures(CucumberOptions options, RuntimeOptionsBuilder args) {
         if (options != null && options.features().length != 0) {
             for (String feature : options.features()) {
-                if (feature.startsWith("@")) {
-                    Path rerunFile = Paths.get(feature.substring(1));
-                    args.addRerun(parseFeatureWithLinesFile(rerunFile));
-                } else {
-                    FeatureWithLines featureWithLines = FeatureWithLines.parse(feature);
-                    args.addFeature(featureWithLines);
-                }
+                FeatureWithLinesOrRerunPath parsed = FeatureWithLinesOrRerunPath.parse(feature);
+                parsed.getFeaturesToRerun().ifPresent(args::addRerun);
+                parsed.getFeatureWithLines().ifPresent(args::addFeature);
             }
             featuresSpecified = true;
         }
@@ -146,6 +141,12 @@ public final class CucumberOptionsAnnotationParser {
     private void addObjectFactory(CucumberOptions options, RuntimeOptionsBuilder args) {
         if (options.objectFactory() != null) {
             args.setObjectFactoryClass(options.objectFactory());
+        }
+    }
+
+    private void addUuidGenerator(CucumberOptions options, RuntimeOptionsBuilder args) {
+        if (options.uuidGenerator() != null) {
+            args.setUuidGeneratorClass(options.uuidGenerator());
         }
     }
 
@@ -207,6 +208,8 @@ public final class CucumberOptionsAnnotationParser {
         SnippetType snippets();
 
         Class<? extends ObjectFactory> objectFactory();
+
+        Class<? extends UuidGenerator> uuidGenerator();
 
     }
 

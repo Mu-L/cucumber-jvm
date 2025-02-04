@@ -18,7 +18,6 @@ import java.time.Clock;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -30,8 +29,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static io.cucumber.core.exception.ExceptionUtils.throwAsUncheckedException;
-import static io.cucumber.core.exception.UnrecoverableExceptions.rethrowIfUnrecoverable;
 import static io.cucumber.core.runtime.SynchronizedEventBus.synchronize;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.collectingAndThen;
@@ -76,30 +73,12 @@ public final class Runtime {
     }
 
     public void run() {
-        context.startTestRun();
-        execute(() -> {
-            context.runBeforeAllHooks();
-            runFeatures();
-        });
-        execute(context::runAfterAllHooks);
-        execute(context::finishTestRun);
-        Throwable exception = context.getThrowable();
-        if (exception != null) {
-            throwAsUncheckedException(exception);
-        }
-    }
-
-    private void execute(Runnable runnable) {
-        try {
-            runnable.run();
-        } catch (Throwable t) {
-            // Collected in CucumberExecutionContext
-            rethrowIfUnrecoverable(t);
-        }
-    }
-
-    private void runFeatures() {
+        // Parse the features early. Don't proceed when there are lexer errors
         List<Feature> features = featureSupplier.get();
+        context.runFeatures(() -> runFeatures(features));
+    }
+
+    private void runFeatures(List<Feature> features) {
         features.forEach(context::beforeFeature);
         List<Future<?>> executingPickles = features.stream()
                 .flatMap(feature -> feature.getPickles().stream())
@@ -134,7 +113,7 @@ public final class Runtime {
 
     public static class Builder {
 
-        private EventBus eventBus = new TimeServiceEventBus(Clock.systemUTC(), UUID::randomUUID);
+        private EventBus eventBus;
         private Supplier<ClassLoader> classLoader = ClassLoaders::getDefaultClassLoader;
         private RuntimeOptions runtimeOptions = RuntimeOptions.defaultOptions();
         private BackendSupplier backendSupplier;
@@ -193,6 +172,13 @@ public final class Runtime {
             final ExitStatus exitStatus = new ExitStatus(runtimeOptions);
             plugins.addPlugin(exitStatus);
 
+            if (this.eventBus == null) {
+                final UuidGeneratorServiceLoader uuidGeneratorServiceLoader = new UuidGeneratorServiceLoader(
+                    classLoader,
+                    runtimeOptions);
+                this.eventBus = new TimeServiceEventBus(Clock.systemUTC(),
+                    uuidGeneratorServiceLoader.loadUuidGenerator());
+            }
             final EventBus eventBus = synchronize(this.eventBus);
 
             if (runtimeOptions.isMultiThreaded()) {

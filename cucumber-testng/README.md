@@ -1,7 +1,7 @@
 Cucumber TestNG 
 ==============
 
-Use TestNG to execute cucumber scenarios. To use add the `cucumber-testng` dependency to your pom.
+Use TestNG to execute Cucumber scenarios. To use add the `cucumber-testng` dependency to your pom.
 
 ```xml
 <dependencies>
@@ -29,7 +29,7 @@ public class RunCucumberTest extends AbstractTestNGCucumberTests {
 }
 ```
 
-This will execute all scenarios in same package as the runner, by default glue code is also assumed to be in the same 
+This will execute all scenarios in the same package as the runner. By default, glue code is also assumed to be in the same 
 package. The `@CucumberOptions` can be used to provide
 [additional configuration](https://docs.cucumber.io/cucumber/api/#list-configuration-options) to the runner. 
 
@@ -84,8 +84,7 @@ Where **dataproviderthreadcount** is the default number of threads to use for da
 
 ### Configure cucumber options via testNG xml
 
-If you need different [cucumber options](../core/src/main/java/io/cucumber/core/options/Constants.java) 
-for each test suite, add the cucumber options as parameters to the relevant suite. Add the common options inside the
+If you need different [cucumber options](../cucumber-core) for each test suite, add the cucumber options as parameters to the relevant suite. Add the common options inside the
 suite.
 
 ```xml

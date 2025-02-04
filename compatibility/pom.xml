@@ -4,7 +4,7 @@
     <parent>
         <artifactId>cucumber-jvm</artifactId>
         <groupId>io.cucumber</groupId>
-        <version>7.6.1-SNAPSHOT</version>
+        <version>7.21.1-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -12,9 +12,9 @@
     <name>Cucumber-JVM: Compatibility Kit</name>
 
     <properties>
-        <hamcrest.version>2.2</hamcrest.version>
-        <jackson-databind.version>2.13.3</jackson-databind.version>
-        <junit-jupiter.version>5.9.0</junit-jupiter.version>
+        <hamcrest.version>3.0</hamcrest.version>
+        <jackson.version>2.18.2</jackson.version>
+        <junit-jupiter.version>5.11.4</junit-jupiter.version>
     </properties>
 
     <dependencyManagement>
@@ -36,7 +36,7 @@
             <dependency>
                 <groupId>com.fasterxml.jackson</groupId>
                 <artifactId>jackson-bom</artifactId>
-                <version>${jackson-databind.version}</version>
+                <version>${jackson.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -51,7 +51,7 @@
         </dependency>
         <dependency>
             <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest-core</artifactId>
+            <artifactId>hamcrest</artifactId>
             <version>${hamcrest.version}</version>
             <scope>test</scope>
         </dependency>
@@ -63,7 +63,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson-databind.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

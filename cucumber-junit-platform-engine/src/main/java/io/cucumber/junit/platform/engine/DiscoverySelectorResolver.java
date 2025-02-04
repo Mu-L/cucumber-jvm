@@ -3,6 +3,7 @@ package io.cucumber.junit.platform.engine;
 import io.cucumber.core.feature.FeatureWithLines;
 import io.cucumber.core.logging.Logger;
 import io.cucumber.core.logging.LoggerFactory;
+import io.cucumber.junit.platform.engine.NodeDescriptor.PickleDescriptor;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.EngineDiscoveryRequest;
 import org.junit.platform.engine.Filter;
@@ -26,7 +27,7 @@ import static org.junit.platform.engine.Filter.composeFilters;
 
 class DiscoverySelectorResolver {
 
-    private static final Logger log = LoggerFactory.getLogger(FeatureResolver.class);
+    private static final Logger log = LoggerFactory.getLogger(DiscoverySelectorResolver.class);
 
     private static boolean warnedWhenCucumberFeaturesPropertyIsUsed = false;
 
@@ -36,10 +37,15 @@ class DiscoverySelectorResolver {
         }
         warnedWhenCucumberFeaturesPropertyIsUsed = true;
         log.warn(
-            () -> "Discovering tests using the " + FEATURES_PROPERTY_NAME
-                    + " property. Other discovery selectors are ignored!\n" +
-                    "Please request/upvote/sponsor/ect better support for JUnit 5 discovery selectors.\n" +
-                    "See: https://github.com/cucumber/cucumber-jvm/pull/2498");
+            () -> "Discovering tests using the " + FEATURES_PROPERTY_NAME + " property. Other discovery " +
+                    "selectors are ignored!\n" +
+                    "\n" +
+                    "This is a work around for the limited JUnit 5 support in Maven and Gradle. " +
+                    "Please request/upvote/sponsor/ect better support for JUnit 5 discovery selectors. " +
+                    "For details see: https://github.com/cucumber/cucumber-jvm/pull/2498\n" +
+                    "\n" +
+                    "If you are using the JUnit 5 Suite Engine, Platform Launcher API or Console Launcher you " +
+                    "should not use this property. Please consult the JUnit 5 documentation on test selection.");
     }
 
     void resolveSelectors(EngineDiscoveryRequest request, CucumberEngineDescriptor engineDescriptor) {

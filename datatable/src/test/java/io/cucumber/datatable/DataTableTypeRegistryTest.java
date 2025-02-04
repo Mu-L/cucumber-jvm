@@ -14,7 +14,10 @@ import static io.cucumber.datatable.TypeFactory.constructType;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DataTableTypeRegistryTest {
 
@@ -29,6 +32,7 @@ class DataTableTypeRegistryTest {
     private static final Type LIST_OF_LIST_OF_FLOAT = aListOf(aListOf(Float.class));
     private static final Type LIST_OF_LIST_OF_DOUBLE = aListOf(aListOf(Double.class));
     private static final Type LIST_OF_LIST_OF_STRING = aListOf(aListOf(String.class));
+    private static final Type LIST_OF_LIST_OF_BOOLEAN = aListOf(aListOf(Boolean.class));
     private static final Type LIST_OF_LIST_OF_OBJECT = aListOf(aListOf(Object.class));
 
     private static final TableCellByTypeTransformer PLACE_TABLE_CELL_TRANSFORMER = (value,
@@ -244,4 +248,28 @@ class DataTableTypeRegistryTest {
             singletonList(singletonList("")),
             dataTableType.transform(singletonList(singletonList("[blank]"))));
     }
+
+    @Test
+    void parse_boolean() {
+        DataTableTypeRegistry registry = new DataTableTypeRegistry(Locale.ENGLISH);
+        DataTableType dataTableType = registry.lookupTableTypeByType(LIST_OF_LIST_OF_BOOLEAN);
+        assertEquals(
+            singletonList(singletonList(Boolean.TRUE)),
+            dataTableType.transform(singletonList(singletonList("true"))));
+        assertEquals(
+            singletonList(singletonList(Boolean.FALSE)),
+            dataTableType.transform(singletonList(singletonList("false"))));
+    }
+
+    @Test
+    void boolean_transformer_is_replaceable() {
+        DataTableTypeRegistry registry = new DataTableTypeRegistry(Locale.ENGLISH);
+        registry.defineDataTableType(
+            new DataTableType(Boolean.class, (String cell) -> "yes".equals(cell)));
+        DataTableType dataTableType = registry.lookupTableTypeByType(LIST_OF_LIST_OF_BOOLEAN);
+        assertEquals(
+            singletonList(singletonList(Boolean.TRUE)),
+            dataTableType.transform(singletonList(singletonList("yes"))));
+    }
+
 }

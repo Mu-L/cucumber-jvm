@@ -1,6 +1,7 @@
 package io.cucumber.core.options;
 
 import io.cucumber.core.backend.ObjectFactory;
+import io.cucumber.core.eventbus.UuidGenerator;
 import io.cucumber.core.feature.FeatureWithLines;
 import io.cucumber.core.order.PickleOrder;
 import io.cucumber.core.order.StandardPickleOrders;
@@ -23,6 +24,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static io.cucumber.core.resource.ClasspathSupport.rootPackageUri;
+import static java.lang.Boolean.FALSE;
+import static java.lang.Boolean.TRUE;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.unmodifiableList;
@@ -33,7 +36,8 @@ public final class RuntimeOptions implements
         io.cucumber.core.runner.Options,
         io.cucumber.core.plugin.Options,
         io.cucumber.core.filter.Options,
-        io.cucumber.core.backend.Options {
+        io.cucumber.core.backend.Options,
+        io.cucumber.core.eventbus.Options {
 
     private final List<URI> glue = new ArrayList<>();
     private final List<Expression> tagExpressions = new ArrayList<>();
@@ -48,9 +52,15 @@ public final class RuntimeOptions implements
     private PickleOrder pickleOrder = StandardPickleOrders.lexicalUriOrder();
     private int count = 0;
     private Class<? extends ObjectFactory> objectFactoryClass;
+    private Class<? extends UuidGenerator> uuidGeneratorClass;
     private String publishToken;
-    private boolean publish;
-    private boolean publishQuiet;
+    private Boolean publish;
+    // Disable the banner advertising the hosted cucumber reports by default
+    // until the uncertainty around the projects future is resolved. It would
+    // not be proper to advertise a service that may be discontinued to new
+    // users.
+    // For context see: https://mattwynne.net/new-beginning
+    private boolean publishQuiet = true;
     private boolean enablePublishPlugin;
 
     private RuntimeOptions() {
@@ -105,10 +115,11 @@ public final class RuntimeOptions implements
         if (!enablePublishPlugin) {
             return emptyList();
         }
-        if (publishToken != null) {
+        // Implicitly enabled by the token if not explicitly disabled
+        if (!FALSE.equals(publish) && publishToken != null) {
             return singletonList(PluginOption.forClass(PublishFormatter.class, publishToken));
         }
-        if (publish) {
+        if (TRUE.equals(publish)) {
             return singletonList(PluginOption.forClass(PublishFormatter.class));
         }
         if (publishQuiet) {
@@ -156,6 +167,15 @@ public final class RuntimeOptions implements
 
     void setObjectFactoryClass(Class<? extends ObjectFactory> objectFactoryClass) {
         this.objectFactoryClass = objectFactoryClass;
+    }
+
+    @Override
+    public Class<? extends UuidGenerator> getUuidGeneratorClass() {
+        return uuidGeneratorClass;
+    }
+
+    void setUuidGeneratorClass(Class<? extends UuidGenerator> uuidGeneratorClass) {
+        this.uuidGeneratorClass = uuidGeneratorClass;
     }
 
     void setSnippetType(SnippetType snippetType) {
@@ -245,7 +265,7 @@ public final class RuntimeOptions implements
         this.publishToken = token;
     }
 
-    void setPublish(boolean publish) {
+    void setPublish(Boolean publish) {
         this.publish = publish;
     }
 

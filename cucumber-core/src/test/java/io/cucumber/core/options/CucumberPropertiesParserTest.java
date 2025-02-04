@@ -2,6 +2,8 @@ package io.cucumber.core.options;
 
 import io.cucumber.core.backend.ObjectFactory;
 import io.cucumber.core.exception.CucumberException;
+import io.cucumber.core.logging.LogRecordListener;
+import io.cucumber.core.logging.WithLogRecordListener;
 import io.cucumber.core.order.StandardPickleOrders;
 import io.cucumber.core.snippets.SnippetType;
 import io.cucumber.tagexpressions.TagExpressionParser;
@@ -30,6 +32,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@WithLogRecordListener
 class CucumberPropertiesParserTest {
 
     private final CucumberPropertiesParser cucumberPropertiesParser = new CucumberPropertiesParser();
@@ -139,6 +142,16 @@ class CucumberPropertiesParserTest {
     }
 
     @Test
+    void should_warn_about_cucumber_options(LogRecordListener logRecordListener) {
+        properties.put(Constants.OPTIONS_PROPERTY_NAME, "--help");
+        cucumberPropertiesParser.parse(properties).build();
+        assertThat(logRecordListener.getLogRecords().get(0).getMessage(), equalTo("" +
+                "Passing commandline options via the property 'cucumber.options' is no longer supported. " +
+                "Please use individual properties instead. " +
+                "See the java doc on io.cucumber.core.options.Constants for details."));
+    }
+
+    @Test
     void should_parse_plugin() {
         properties.put(Constants.PLUGIN_PROPERTY_NAME, "message:target/cucumber.ndjson, html:target/cucumber.html");
         RuntimeOptions options = cucumberPropertiesParser.parse(properties).build();
@@ -147,12 +160,12 @@ class CucumberPropertiesParserTest {
     }
 
     @Test
-    void should_have_no_publish_plugin_enabled_by_default() {
+    void should_have_publish_plugin_disabled_by_default() {
         RuntimeOptions options = cucumberPropertiesParser
                 .parse(properties)
                 .enablePublishPlugin()
                 .build();
-        assertThat(options.plugins().get(0).pluginString(), equalTo("io.cucumber.core.plugin.NoPublishFormatter"));
+        assertThat(options.plugins(), empty());
     }
 
     @Test
@@ -170,6 +183,17 @@ class CucumberPropertiesParserTest {
                 .enablePublishPlugin()
                 .build();
         assertThat(options.plugins().get(0).pluginString(), equalTo("io.cucumber.core.plugin.PublishFormatter"));
+    }
+
+    @Test
+    void should_parse_plugin_publish_disabled_and_publish_token() {
+        properties.put(Constants.PLUGIN_PUBLISH_ENABLED_PROPERTY_NAME, "false");
+        properties.put(Constants.PLUGIN_PUBLISH_TOKEN_PROPERTY_NAME, "some/value");
+        RuntimeOptions options = cucumberPropertiesParser
+                .parse(properties)
+                .enablePublishPlugin()
+                .build();
+        assertThat(options.plugins(), empty());
     }
 
     @Test
@@ -212,6 +236,16 @@ class CucumberPropertiesParserTest {
         properties.put(Constants.FEATURES_PROPERTY_NAME, "@" + path.toString());
         RuntimeOptions options = cucumberPropertiesParser.parse(properties).build();
         assertThat(options.getFeaturePaths(), containsInAnyOrder(URI.create("classpath:path/to.feature")));
+    }
+
+    @Test
+    void should_parse_rerun_files() throws IOException {
+        mockFileResource("classpath:path/to.feature");
+        mockFileResource("classpath:path/to/other.feature");
+        properties.put(Constants.FEATURES_PROPERTY_NAME, "@" + temp.toString());
+        RuntimeOptions options = cucumberPropertiesParser.parse(properties).build();
+        assertThat(options.getFeaturePaths(),
+            containsInAnyOrder(URI.create("classpath:path/to.feature"), URI.create("classpath:path/to/other.feature")));
     }
 
     @Test

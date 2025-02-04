@@ -4,27 +4,21 @@
     <parent>
         <groupId>io.cucumber</groupId>
         <artifactId>cucumber-parent</artifactId>
-        <version>3.0.0</version>
+        <version>4.2.0</version>
+        <relativePath/>
     </parent>
     <artifactId>cucumber-jvm</artifactId>
-    <version>7.6.1-SNAPSHOT</version>
+    <version>7.21.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Cucumber-JVM</name>
     <description>Cucumber for the JVM</description>
-    <url>http://cucumber.io/</url>
+    <url>https://cucumber.io/</url>
 
     <properties>
         <!-- Tool chains, ect -->
         <base.java.version>1.8</base.java.version>
         <javadoc.java.version>8</javadoc.java.version>
-
-        <!-- io.cucumber dependencies -->
-        <!-- Whenever messages is updated run `make update-cck` -->
-        <messages.version>19.1.2</messages.version>
-        <gherkin.version>24.0.0</gherkin.version>
-
-        <!--Maven plugins-->
-        <groovy.version>2.5.15</groovy.version>
+        <project.build.outputTimestamp>1738523550</project.build.outputTimestamp>
     </properties>
     <scm>
         <connection>scm:git:git://github.com/cucumber/cucumber-jvm.git</connection>
@@ -342,12 +336,10 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0-M7</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>3.0.0-M7</version>
                 </plugin>
 
                 <!-- Determine project root for revapi and spotless  -->
@@ -371,12 +363,12 @@
                 <plugin>
                     <groupId>org.revapi</groupId>
                     <artifactId>revapi-maven-plugin</artifactId>
-                    <version>0.14.7</version>
+                    <version>0.15.0</version>
                     <dependencies>
                         <dependency>
                             <groupId>org.revapi</groupId>
                             <artifactId>revapi-java</artifactId>
-                            <version>0.27.0</version>
+                            <version>0.28.1</version>
                         </dependency>
                     </dependencies>
                     <configuration>
@@ -399,6 +391,9 @@
                             <revapi.differences id="junit5-api-issues">
                                 <ignore>true</ignore>
                             </revapi.differences>
+                            <revapi.differences id="jackson-api-issues">
+                                <ignore>true</ignore>
+                            </revapi.differences>
                         </analysisConfiguration>
                         <analysisConfigurationFiles>
                             <configurationFile>
@@ -410,6 +405,7 @@
                                     <root>testng</root>
                                     <root>guice</root>
                                     <root>junit5</root>
+                                    <root>jackson</root>
                                 </roots>
                             </configurationFile>
                         </analysisConfigurationFiles>
@@ -425,7 +421,7 @@
                                 <file>${main.basedir}/.spotless/eclipse-formatter-settings.xml</file>
                             </eclipse>
                             <importOrder>
-                                <file>${main.basedir}/.spotless/intelij-idea.importorder</file>
+                                <file>${main.basedir}/.spotless/intellij-idea.importorder</file>
                             </importOrder>
                         </java>
                     </configuration>
@@ -439,12 +435,13 @@
                         <dependency>
                             <groupId>com.puppycrawl.tools</groupId>
                             <artifactId>checkstyle</artifactId>
-                            <version>10.3.2</version>
+                            <version>10.21.2</version>
                         </dependency>
                     </dependencies>
                     <configuration>
                         <consoleOutput>true</consoleOutput>
                         <failsOnError>true</failsOnError>
+                        <includeTestSourceDirectory>true</includeTestSourceDirectory>
                         <checkstyleRules>
                             <module name="Checker">
                                 <property name="severity" value="error"/>

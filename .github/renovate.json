@@ -1,15 +1,12 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base", 
-    ":disableDependencyDashboard"
+    "github>cucumber/renovate-config"
   ],
-  "labels": [":robot: dependencies"],
-  "prHourlyLimit": 0,
   "packageRules": [
     {
-      "updateTypes": ["minor", "patch"],
-      "automerge": true,
-      "automergeType": "branch"
+      "matchPackagePatterns": ["io.cucumber:(messages|gherkin|html-formatter|junit-xml-formatter)"],
+      "groupName": "Messages and dependants"
     }
   ]
 }

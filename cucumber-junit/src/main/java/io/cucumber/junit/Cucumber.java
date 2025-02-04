@@ -23,6 +23,7 @@ import io.cucumber.core.runtime.ObjectFactorySupplier;
 import io.cucumber.core.runtime.ThreadLocalObjectFactorySupplier;
 import io.cucumber.core.runtime.ThreadLocalRunnerSupplier;
 import io.cucumber.core.runtime.TimeServiceEventBus;
+import io.cucumber.core.runtime.UuidGeneratorServiceLoader;
 import org.apiguardian.api.API;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -38,7 +39,6 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -146,11 +146,14 @@ public final class Cucumber extends ParentRunner<ParentRunner<?>> {
                 .parse(CucumberProperties.fromSystemProperties())
                 .build(junitEnvironmentOptions);
 
-        this.bus = synchronize(new TimeServiceEventBus(Clock.systemUTC(), UUID::randomUUID));
+        Supplier<ClassLoader> classLoader = ClassLoaders::getDefaultClassLoader;
+        UuidGeneratorServiceLoader uuidGeneratorServiceLoader = new UuidGeneratorServiceLoader(classLoader,
+            runtimeOptions);
+        this.bus = synchronize(
+            new TimeServiceEventBus(Clock.systemUTC(), uuidGeneratorServiceLoader.loadUuidGenerator()));
 
         // Parse the features early. Don't proceed when there are lexer errors
         FeatureParser parser = new FeatureParser(bus::generateId);
-        Supplier<ClassLoader> classLoader = ClassLoaders::getDefaultClassLoader;
         FeaturePathFeatureSupplier featureSupplier = new FeaturePathFeatureSupplier(classLoader, runtimeOptions,
             parser);
         List<Feature> features = featureSupplier.get();
@@ -199,13 +202,7 @@ public final class Cucumber extends ParentRunner<ParentRunner<?>> {
     @Override
     protected Statement childrenInvoker(RunNotifier notifier) {
         Statement statement = super.childrenInvoker(notifier);
-
-        statement = new RunBeforeAllHooks(statement);
-        statement = new RunAfterAllHooks(statement);
-
-        statement = new StartTestRun(statement);
-        statement = new FinishTestRun(statement);
-
+        statement = new StartAndFinishTestRun(statement);
         return statement;
     }
 
@@ -215,75 +212,22 @@ public final class Cucumber extends ParentRunner<ParentRunner<?>> {
         multiThreadingAssumed = true;
     }
 
-    private class StartTestRun extends Statement {
+    private class StartAndFinishTestRun extends Statement {
         private final Statement next;
 
-        public StartTestRun(Statement next) {
+        public StartAndFinishTestRun(Statement next) {
             this.next = next;
         }
 
         @Override
-        public void evaluate() throws Throwable {
+        public void evaluate() {
             if (multiThreadingAssumed) {
                 plugins.setSerialEventBusOnEventListenerPlugins(bus);
             } else {
                 plugins.setEventBusOnEventListenerPlugins(bus);
             }
-            context.startTestRun();
-            next.evaluate();
+            context.runFeatures(next::evaluate);
         }
-
-    }
-
-    private class FinishTestRun extends Statement {
-        private final Statement next;
-
-        public FinishTestRun(Statement next) {
-            this.next = next;
-        }
-
-        @Override
-        public void evaluate() throws Throwable {
-            try {
-                next.evaluate();
-            } finally {
-                context.finishTestRun();
-            }
-        }
-
-    }
-
-    private class RunBeforeAllHooks extends Statement {
-        private final Statement next;
-
-        public RunBeforeAllHooks(Statement next) {
-            this.next = next;
-        }
-
-        @Override
-        public void evaluate() throws Throwable {
-            context.runBeforeAllHooks();
-            next.evaluate();
-        }
-
-    }
-
-    private class RunAfterAllHooks extends Statement {
-        private final Statement next;
-
-        public RunAfterAllHooks(Statement next) {
-            this.next = next;
-        }
-
-        @Override
-        public void evaluate() throws Throwable {
-            try {
-                next.evaluate();
-            } finally {
-                context.runAfterAllHooks();
-            }
-        }
-
     }
 
 }
