@@ -10,9 +10,6 @@ import io.cucumber.plugin.event.TestCase;
 import io.cucumber.plugin.event.TestStepFinished;
 import io.cucumber.plugin.event.TestStepStarted;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -22,8 +19,7 @@ import static io.cucumber.core.exception.UnrecoverableExceptions.rethrowIfUnreco
 import static io.cucumber.core.runner.ExecutionMode.SKIP;
 import static io.cucumber.core.runner.TestAbortedExceptions.createIsTestAbortedExceptionPredicate;
 import static io.cucumber.core.runner.TestStepResultStatusMapper.from;
-import static io.cucumber.messages.TimeConversion.javaDurationToDuration;
-import static io.cucumber.messages.TimeConversion.javaInstantToTimestamp;
+import static io.cucumber.messages.Convertor.toMessage;
 import static java.time.Duration.ZERO;
 
 abstract class TestStep implements io.cucumber.plugin.event.TestStep {
@@ -75,7 +71,7 @@ abstract class TestStep implements io.cucumber.plugin.event.TestStep {
         Envelope envelope = Envelope.of(new io.cucumber.messages.types.TestStepStarted(
             textExecutionId.toString(),
             id.toString(),
-            javaInstantToTimestamp(startTime)));
+            toMessage(startTime)));
         bus.send(envelope);
     }
 
@@ -117,23 +113,16 @@ abstract class TestStep implements io.cucumber.plugin.event.TestStep {
         bus.send(new TestStepFinished(stopTime, testCase, this, result));
 
         TestStepResult testStepResult = new TestStepResult(
-            javaDurationToDuration(duration),
-            result.getError() != null ? extractStackTrace(result.getError()) : null,
-            from(result.getStatus()));
+            toMessage(duration),
+            result.getError() != null ? result.getError().getMessage() : null,
+            from(result.getStatus()),
+            result.getError() != null ? toMessage(result.getError()) : null);
 
         Envelope envelope = Envelope.of(new io.cucumber.messages.types.TestStepFinished(
             textExecutionId.toString(),
             id.toString(),
             testStepResult,
-            javaInstantToTimestamp(stopTime)));
+            toMessage(stopTime)));
         bus.send(envelope);
     }
-
-    private String extractStackTrace(Throwable error) {
-        ByteArrayOutputStream s = new ByteArrayOutputStream();
-        PrintStream printStream = new PrintStream(s);
-        error.printStackTrace(printStream);
-        return new String(s.toByteArray(), StandardCharsets.UTF_8);
-    }
-
 }

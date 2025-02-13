@@ -38,8 +38,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -164,9 +162,9 @@ class PickleStepTestStepTest {
         assertThat(state.getStatus(), is(equalTo(FAILED)));
 
         ArgumentCaptor<TestCaseEvent> captor = forClass(TestCaseEvent.class);
-        verify(bus, times(12)).send(captor.capture());
+        verify(bus, times(6)).send(captor.capture());
         List<TestCaseEvent> allValues = captor.getAllValues();
-        assertThat(((TestStepFinished) allValues.get(2)).getResult(), is(equalTo(failure)));
+        assertThat(((TestStepFinished) allValues.get(1)).getResult(), is(equalTo(failure)));
     }
 
     @Test
@@ -179,9 +177,9 @@ class PickleStepTestStepTest {
         assertThat(state.getStatus(), is(equalTo(FAILED)));
 
         ArgumentCaptor<TestCaseEvent> captor = forClass(TestCaseEvent.class);
-        verify(bus, times(12)).send(captor.capture());
+        verify(bus, times(6)).send(captor.capture());
         List<TestCaseEvent> allValues = captor.getAllValues();
-        assertThat(((TestStepFinished) allValues.get(6)).getResult(), is(equalTo(failure)));
+        assertThat(((TestStepFinished) allValues.get(3)).getResult(), is(equalTo(failure)));
     }
 
     @Test
@@ -194,9 +192,9 @@ class PickleStepTestStepTest {
         assertThat(state.getStatus(), is(equalTo(FAILED)));
 
         ArgumentCaptor<Object> captor = forClass(TestCaseEvent.class);
-        verify(bus, times(12)).send(captor.capture());
+        verify(bus, times(6)).send(captor.capture());
         List<Object> allValues = captor.getAllValues();
-        assertThat(((TestStepFinished) allValues.get(10)).getResult(), is(equalTo(failure)));
+        assertThat(((TestStepFinished) allValues.get(5)).getResult(), is(equalTo(failure)));
     }
 
     @Test
@@ -281,11 +279,11 @@ class PickleStepTestStepTest {
         step.run(testCase, bus, state, ExecutionMode.RUN);
 
         ArgumentCaptor<TestCaseEvent> captor = forClass(TestCaseEvent.class);
-        verify(bus, times(4)).send(captor.capture());
+        verify(bus, times(2)).send(captor.capture());
 
         List<TestCaseEvent> allValues = captor.getAllValues();
         TestStepStarted started = (TestStepStarted) allValues.get(0);
-        TestStepFinished finished = (TestStepFinished) allValues.get(2);
+        TestStepFinished finished = (TestStepFinished) allValues.get(1);
 
         assertAll(
             () -> assertThat(started.getInstant(), is(equalTo(ofEpochMilli(234L)))),

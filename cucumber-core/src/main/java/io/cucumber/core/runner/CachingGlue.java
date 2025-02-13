@@ -28,6 +28,7 @@ import io.cucumber.datatable.TableCellByTypeTransformer;
 import io.cucumber.datatable.TableEntryByTypeTransformer;
 import io.cucumber.messages.types.Envelope;
 import io.cucumber.messages.types.Hook;
+import io.cucumber.messages.types.HookType;
 import io.cucumber.messages.types.JavaMethod;
 import io.cucumber.messages.types.JavaStackTraceElement;
 import io.cucumber.messages.types.Location;
@@ -105,25 +106,25 @@ final class CachingGlue implements Glue {
 
     @Override
     public void addBeforeHook(HookDefinition hookDefinition) {
-        beforeHooks.add(CoreHookDefinition.create(hookDefinition));
+        beforeHooks.add(CoreHookDefinition.create(hookDefinition, bus::generateId));
         beforeHooks.sort(HOOK_ORDER_ASCENDING);
     }
 
     @Override
     public void addAfterHook(HookDefinition hookDefinition) {
-        afterHooks.add(CoreHookDefinition.create(hookDefinition));
+        afterHooks.add(CoreHookDefinition.create(hookDefinition, bus::generateId));
         afterHooks.sort(HOOK_ORDER_ASCENDING);
     }
 
     @Override
     public void addBeforeStepHook(HookDefinition hookDefinition) {
-        beforeStepHooks.add(CoreHookDefinition.create(hookDefinition));
+        beforeStepHooks.add(CoreHookDefinition.create(hookDefinition, bus::generateId));
         beforeStepHooks.sort(HOOK_ORDER_ASCENDING);
     }
 
     @Override
     public void addAfterStepHook(HookDefinition hookDefinition) {
-        afterStepHooks.add(CoreHookDefinition.create(hookDefinition));
+        afterStepHooks.add(CoreHookDefinition.create(hookDefinition, bus::generateId));
         afterStepHooks.sort(HOOK_ORDER_ASCENDING);
     }
 
@@ -235,7 +236,7 @@ final class CachingGlue implements Glue {
         parameterTypeDefinitions.forEach(ptd -> {
             ParameterType<?> parameterType = ptd.parameterType();
             stepTypeRegistry.defineParameterType(parameterType);
-            emitParameterTypeDefined(parameterType);
+            emitParameterTypeDefined(ptd);
         });
         dataTableTypeDefinitions.forEach(dtd -> stepTypeRegistry.defineDataTableType(dtd.dataTableType()));
         docStringTypeDefinitions.forEach(dtd -> stepTypeRegistry.defineDocStringType(dtd.docStringType()));
@@ -285,13 +286,17 @@ final class CachingGlue implements Glue {
         afterHooks.forEach(this::emitHook);
     }
 
-    private void emitParameterTypeDefined(ParameterType<?> parameterType) {
+    private void emitParameterTypeDefined(ParameterTypeDefinition parameterTypeDefinition) {
+        ParameterType<?> parameterType = parameterTypeDefinition.parameterType();
         io.cucumber.messages.types.ParameterType messagesParameterType = new io.cucumber.messages.types.ParameterType(
             parameterType.getName(),
             parameterType.getRegexps(),
             parameterType.preferForRegexpMatch(),
             parameterType.useForSnippets(),
-            bus.generateId().toString());
+            bus.generateId().toString(),
+            parameterTypeDefinition.getSourceReference()
+                    .map(this::createSourceReference)
+                    .orElseGet(this::emptySourceReference));
         bus.send(Envelope.of(messagesParameterType));
     }
 
@@ -302,7 +307,23 @@ final class CachingGlue implements Glue {
             coreHook.getDefinitionLocation()
                     .map(this::createSourceReference)
                     .orElseGet(this::emptySourceReference),
-            coreHook.getTagExpression());
+            coreHook.getTagExpression(),
+            coreHook.getHookType()
+                    .map(hookType -> {
+                        switch (hookType) {
+                            case BEFORE:
+                                return HookType.BEFORE_TEST_CASE;
+                            case AFTER:
+                                return HookType.AFTER_TEST_CASE;
+                            case BEFORE_STEP:
+                                return HookType.BEFORE_TEST_STEP;
+                            case AFTER_STEP:
+                                return HookType.AFTER_TEST_STEP;
+                            default:
+                                return null;
+                        }
+                    })
+                    .orElse(null));
         bus.send(Envelope.of(messagesHook));
     }
 

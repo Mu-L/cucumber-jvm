@@ -5,6 +5,7 @@ import com.google.inject.ConfigurationException;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
+import com.google.inject.Provides;
 import com.google.inject.Scopes;
 import com.google.inject.Stage;
 import io.cucumber.core.backend.CucumberBackendException;
@@ -14,18 +15,19 @@ import io.cucumber.guice.factory.SecondInjectorSource;
 import io.cucumber.guice.integration.YourInjectorSource;
 import io.cucumber.guice.matcher.ElementsAreAllEqualMatcher;
 import io.cucumber.guice.matcher.ElementsAreAllUniqueMatcher;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
-import javax.inject.Singleton;
-
 import java.util.Arrays;
 import java.util.List;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,9 +52,8 @@ class GuiceFactoryTest {
     void tearDown() {
         // If factory is left in start state it can cause cascading failures due
         // to scope being left open
-        try {
+        if (factory != null) {
             factory.stop();
-        } catch (Exception ignored) {
         }
     }
 
@@ -78,12 +79,9 @@ class GuiceFactoryTest {
     void factoryStartFailsIfScenarioScopeIsNotBound() {
         initFactory(Guice.createInjector());
 
-        Executable testMethod = () -> factory.start();
-        ConfigurationException actualThrown = assertThrows(ConfigurationException.class, testMethod);
-        assertThat("Unexpected exception message", actualThrown.getMessage(), startsWith(
-            "Guice configuration errors:\n" +
-                    "\n" +
-                    "1) [Guice/MissingImplementation]: No implementation for ScenarioScope was bound."));
+        ConfigurationException actualThrown = assertThrows(ConfigurationException.class, () -> factory.start());
+        assertThat("Unexpected exception message", actualThrown.getMessage(),
+            containsString("1) [Guice/MissingImplementation]: No implementation for ScenarioScope was bound."));
     }
 
     @Test
@@ -247,6 +245,15 @@ class GuiceFactoryTest {
         assertThat("Unexpected exception message", actualThrown.getMessage(), is(exceptionMessage));
     }
 
+    @Test
+    void shouldInjectStaticBeforeStart() {
+        factory = new GuiceFactory();
+        WithStaticFieldClass.property = null;
+        factory.addClass(CucumberInjector.class);
+        assertThat(WithStaticFieldClass.property, equalTo("Hello world"));
+
+    }
+
     static class UnscopedClass {
 
     }
@@ -267,6 +274,31 @@ class GuiceFactoryTest {
 
     static class BoundSingletonClass {
 
+    }
+    static class WithStaticFieldClass {
+
+        @Inject
+        static String property;
+
+    }
+
+    public static class CucumberInjector implements InjectorSource {
+
+        @Override
+        public Injector getInjector() {
+            return Guice.createInjector(Stage.PRODUCTION, CucumberModules.createScenarioModule(), new AbstractModule() {
+                @Override
+                protected void configure() {
+                    requestStaticInjection(WithStaticFieldClass.class);
+                }
+
+                @Singleton
+                @Provides
+                public String providesSomeString() {
+                    return "Hello world";
+                }
+            });
+        }
     }
 
 }

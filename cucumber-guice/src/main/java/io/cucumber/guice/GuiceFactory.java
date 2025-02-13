@@ -10,6 +10,8 @@ import org.apiguardian.api.API;
 import java.util.Collection;
 import java.util.HashSet;
 
+import static io.cucumber.guice.InjectorSourceFactory.createDefaultScenarioModuleInjectorSource;
+import static io.cucumber.guice.InjectorSourceFactory.instantiateUserSpecifiedInjectorSource;
 import static io.cucumber.guice.InjectorSourceFactory.loadInjectorSourceFromProperties;
 import static java.lang.String.format;
 
@@ -24,10 +26,15 @@ public final class GuiceFactory implements ObjectFactory {
 
     private final Collection<Class<?>> stepClasses = new HashSet<>();
     private final Class<?> injectorSourceFromProperty;
-    private Class<?> withInjectorSource = null;
+    private Class<?> withInjectorSource;
+    private ScenarioScope scenarioScope;
 
     public GuiceFactory() {
-        injectorSourceFromProperty = loadInjectorSourceFromProperties(CucumberProperties.create());
+        this.injectorSourceFromProperty = loadInjectorSourceFromProperties(CucumberProperties.create());
+        // Eager init to allow for static binding prior to before all hooks
+        if (this.injectorSourceFromProperty != null) {
+            injector = instantiateUserSpecifiedInjectorSource(this.injectorSourceFromProperty).getInjector();
+        }
     }
 
     @Override
@@ -39,6 +46,9 @@ public final class GuiceFactory implements ObjectFactory {
             if (hasInjectorSource(stepClass)) {
                 checkOnlyOneClassHasInjectorSource(stepClass);
                 withInjectorSource = stepClass;
+                // Eager init to allow for static binding prior to before all
+                // hooks
+                injector = instantiateUserSpecifiedInjectorSource(withInjectorSource).getInjector();
             }
         }
         stepClasses.add(stepClass);
@@ -68,15 +78,20 @@ public final class GuiceFactory implements ObjectFactory {
     }
 
     public void start() {
+        // Last minute init. Neither properties not annotations provided an
+        // injector source.
         if (injector == null) {
-            injector = new InjectorSourceFactory(withInjectorSource).create()
-                    .getInjector();
+            injector = createDefaultScenarioModuleInjectorSource().getInjector();
         }
-        injector.getInstance(ScenarioScope.class).enterScope();
+        scenarioScope = injector.getInstance(ScenarioScope.class);
+        scenarioScope.enterScope();
     }
 
     public void stop() {
-        injector.getInstance(ScenarioScope.class).exitScope();
+        if (scenarioScope != null) {
+            scenarioScope.exitScope();
+            scenarioScope = null;
+        }
     }
 
     public <T> T getInstance(Class<T> clazz) {

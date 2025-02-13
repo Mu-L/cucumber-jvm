@@ -13,10 +13,12 @@ import org.opentest4j.TestAbortedException;
 
 import java.io.ByteArrayOutputStream;
 
-import static io.cucumber.core.plugin.BytesEqualTo.isBytesEqualTo;
+import static io.cucumber.core.plugin.Bytes.bytes;
+import static io.cucumber.core.plugin.IsEqualCompressingLineSeparators.equalCompressingLineSeparators;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 class RerunFormatterTest {
@@ -40,7 +42,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo(""));
+        assertThat(out, bytes(equalTo("")));
     }
 
     @Test
@@ -64,7 +66,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("classpath:path/test.feature:2:4:6\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("classpath:path/test.feature:2:4:6\n")));
     }
 
     @Test
@@ -87,7 +89,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("file:path/test.feature:2\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("file:path/test.feature:2\n")));
     }
 
     @Test
@@ -111,7 +113,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("file:path/test.feature:4\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("file:path/test.feature:4\n")));
     }
 
     @Test
@@ -137,7 +139,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("classpath:path/test.feature:8\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("classpath:path/test.feature:8\n")));
     }
 
     @Test
@@ -163,7 +165,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("classpath:path/test.feature:2\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("classpath:path/test.feature:2\n")));
     }
 
     @Test
@@ -189,7 +191,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("classpath:path/test.feature:2\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("classpath:path/test.feature:2\n")));
     }
 
     @Test
@@ -215,7 +217,7 @@ class RerunFormatterTest {
                 .build()
                 .run();
 
-        assertThat(out, isBytesEqualTo("classpath:path/test.feature:2:5\n"));
+        assertThat(out, bytes(equalCompressingLineSeparators("classpath:path/test.feature:2:5\n")));
     }
 
     @Test
@@ -244,7 +246,8 @@ class RerunFormatterTest {
                 .run();
 
         assertThat(out,
-            isBytesEqualTo("classpath:path/first.feature:2\nclasspath:path/second.feature:2\n"));
+            bytes(
+                equalCompressingLineSeparators("classpath:path/first.feature:2\nclasspath:path/second.feature:2\n")));
     }
 
 }

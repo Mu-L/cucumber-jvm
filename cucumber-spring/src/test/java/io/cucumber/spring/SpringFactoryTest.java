@@ -13,20 +13,19 @@ import io.cucumber.spring.componentannotation.WithComponentAnnotation;
 import io.cucumber.spring.componentannotation.WithControllerAnnotation;
 import io.cucumber.spring.contextconfig.BellyStepDefinitions;
 import io.cucumber.spring.contexthierarchyconfig.WithContextHierarchyAnnotation;
+import io.cucumber.spring.cucumbercontextconfigannotation.WithInheritedAnnotation;
+import io.cucumber.spring.cucumbercontextconfigannotation.WithMetaAnnotation;
 import io.cucumber.spring.dirtiescontextconfig.DirtiesContextBellyStepDefinitions;
 import io.cucumber.spring.metaconfig.dirties.DirtiesContextBellyMetaStepDefinitions;
 import io.cucumber.spring.metaconfig.general.BellyMetaStepDefinitions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.TestContext;
-import org.springframework.test.context.TestExecutionListener;
-import org.springframework.test.context.TestExecutionListeners;
 
 import java.util.Optional;
 
@@ -261,7 +260,7 @@ class SpringFactoryTest {
         Executable testMethod = () -> factory.addClass(BellyStepDefinitions.class);
         CucumberBackendException actualThrown = assertThrows(CucumberBackendException.class, testMethod);
         assertThat(actualThrown.getMessage(), startsWith(
-            "Glue class class io.cucumber.spring.contextconfig.BellyStepDefinitions and class io.cucumber.spring.SpringFactoryTest$WithSpringAnnotations are both annotated with @CucumberContextConfiguration.\n"
+            "Glue class class io.cucumber.spring.contextconfig.BellyStepDefinitions and class io.cucumber.spring.SpringFactoryTest$WithSpringAnnotations are both (meta-)annotated with @CucumberContextConfiguration.\n"
                     +
                     "Please ensure only one class configures the spring context"));
     }
@@ -273,7 +272,7 @@ class SpringFactoryTest {
         Executable testMethod = () -> factory.addClass(WithComponentAnnotation.class);
         CucumberBackendException actualThrown = assertThrows(CucumberBackendException.class, testMethod);
         assertThat(actualThrown.getMessage(), is(equalTo(
-            "Glue class io.cucumber.spring.componentannotation.WithComponentAnnotation was annotated with @Component; marking it as a candidate for auto-detection by Spring. Glue classes are detected and registered by Cucumber. Auto-detection of glue classes by spring may lead to duplicate bean definitions. Please remove the @Component annotation")));
+            "Glue class io.cucumber.spring.componentannotation.WithComponentAnnotation was (meta-)annotated with @Component; marking it as a candidate for auto-detection by Spring. Glue classes are detected and registered by Cucumber. Auto-detection of glue classes by spring may lead to duplicate bean definitions. Please remove the @Component (meta-)annotation")));
     }
 
     @Test
@@ -283,7 +282,7 @@ class SpringFactoryTest {
         Executable testMethod = () -> factory.addClass(WithControllerAnnotation.class);
         CucumberBackendException actualThrown = assertThrows(CucumberBackendException.class, testMethod);
         assertThat(actualThrown.getMessage(), is(equalTo(
-            "Glue class io.cucumber.spring.componentannotation.WithControllerAnnotation was annotated with @Controller; marking it as a candidate for auto-detection by Spring. Glue classes are detected and registered by Cucumber. Auto-detection of glue classes by spring may lead to duplicate bean definitions. Please remove the @Controller annotation")));
+            "Glue class io.cucumber.spring.componentannotation.WithControllerAnnotation was (meta-)annotated with @Component; marking it as a candidate for auto-detection by Spring. Glue classes are detected and registered by Cucumber. Auto-detection of glue classes by spring may lead to duplicate bean definitions. Please remove the @Component (meta-)annotation")));
     }
 
     @Test
@@ -325,38 +324,38 @@ class SpringFactoryTest {
     }
 
     @Test
-    void shouldBeStoppableWhenFacedWithInvalidConfiguration() {
+    void shouldBeStoppableWhenFacedWithBrokenContextConfiguration() {
         final ObjectFactory factory = new SpringFactory();
-        factory.addClass(WithEmptySpringAnnotations.class);
-
-        IllegalStateException exception = assertThrows(IllegalStateException.class, factory::start);
-        assertThat(exception.getMessage(),
-            containsString("DelegatingSmartContextLoader was unable to detect defaults"));
-        assertDoesNotThrow(factory::stop);
-    }
-
-    @Test
-    void shouldBeStoppableWhenFacedWithMissingContextConfiguration() {
-        final ObjectFactory factory = new SpringFactory();
-        factory.addClass(WithoutContextConfiguration.class);
+        factory.addClass(WithBrokenContextConfiguration.class);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, factory::start);
         assertThat(exception.getMessage(), containsString("Failed to load ApplicationContext"));
         assertDoesNotThrow(factory::stop);
     }
 
-    @ParameterizedTest
-    @ValueSource(classes = {
-            FailedBeforeTestClassContextConfiguration.class,
-            FailedBeforeTestMethodContextConfiguration.class,
-            FailedTestInstanceContextConfiguration.class
-    })
-    void shouldBeStoppableWhenFacedWithFailedApplicationContext(Class<?> contextConfiguration) {
+    @Test
+    void shouldBeStoppableWhenFacedWithFailedApplicationContext() {
         final ObjectFactory factory = new SpringFactory();
-        factory.addClass(contextConfiguration);
+        factory.addClass(FailedTestInstanceCreation.class);
 
         assertThrows(CucumberBackendException.class, factory::start);
         assertDoesNotThrow(factory::stop);
+    }
+
+    @Test
+    void shouldNotFailWithCucumberContextConfigurationMetaAnnotation() {
+        final ObjectFactory factory = new SpringFactory();
+        factory.addClass(WithMetaAnnotation.class);
+
+        assertDoesNotThrow(factory::start);
+    }
+
+    @Test
+    void shouldNotFailWithCucumberContextConfigurationInheritedAnnotation() {
+        final ObjectFactory factory = new SpringFactory();
+        factory.addClass(WithInheritedAnnotation.class);
+
+        assertDoesNotThrow(factory::start);
     }
 
     @CucumberContextConfiguration
@@ -384,26 +383,14 @@ class SpringFactoryTest {
     }
 
     @CucumberContextConfiguration
-    @ContextConfiguration
-    public static class WithEmptySpringAnnotations {
+    public static class WithBrokenContextConfiguration {
 
-    }
+        @Configuration
+        public static class BrokenConfiguration {
 
-    @CucumberContextConfiguration
-    public static class WithoutContextConfiguration {
-
-    }
-
-    @CucumberContextConfiguration
-    @ContextConfiguration("classpath:cucumber.xml")
-    @TestExecutionListeners(FailedBeforeTestClassContextConfiguration.FailingListener.class)
-    public static class FailedBeforeTestClassContextConfiguration {
-
-        public static class FailingListener implements TestExecutionListener {
-
-            @Override
-            public void beforeTestClass(TestContext testContext) throws Exception {
-                throw new StubException();
+            @Bean
+            public Object brokenBean() {
+                throw new RuntimeException("Oops!");
             }
 
         }
@@ -412,29 +399,11 @@ class SpringFactoryTest {
 
     @CucumberContextConfiguration
     @ContextConfiguration("classpath:cucumber.xml")
-    @TestExecutionListeners(FailedBeforeTestMethodContextConfiguration.FailingListener.class)
-    public static class FailedBeforeTestMethodContextConfiguration {
+    public static class FailedTestInstanceCreation {
 
-        public static class FailingListener implements TestExecutionListener {
-
-            @Override
-            public void beforeTestMethod(TestContext testContext) throws Exception {
-                throw new StubException();
-            }
-
-        }
-
-    }
-    @CucumberContextConfiguration
-    @ContextConfiguration("classpath:cucumber.xml")
-    public static class FailedTestInstanceContextConfiguration {
-
-        public FailedTestInstanceContextConfiguration() {
+        public FailedTestInstanceCreation() {
             throw new RuntimeException();
         }
     }
 
-    public static class StubException extends Exception {
-
-    }
 }

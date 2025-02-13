@@ -21,7 +21,7 @@ Add the `cucumber-spring` dependency to your `pom.xml`:
 
 ## Configuring the Test Application Context
 
-To make Cucumber aware of your test configuration you can annotate a
+To make Cucumber aware of your test configuration, you can annotate a
 configuration class on your glue path with `@CucumberContextConfiguration` and with one of the
 following annotations: `@ContextConfiguration`, `@ContextHierarchy` or
 `@BootstrapWith`. If you are using SpringBoot, you can annotate configuration
@@ -43,7 +43,18 @@ public class CucumberSpringConfiguration {
 ```
 
 Note: Cucumber Spring uses Spring's `TestContextManager` framework internally.
-As a result a single Cucumber scenario will mostly behave like a JUnit test.
+As a result, a single Cucumber scenario will mostly behave like a JUnit test.
+
+The class annotated with `@CucumberContextConfiguration` is instantiated but not
+initialized by Spring. Instead, this instance is processed by Springs test
+execution listeners. So Spring features that depend on a test execution
+listeners, such as mock beans, will work on the annotated class - but not on
+other step definition classes. 
+
+Step definition classes are instantiated and initialized by Spring. Features
+that depend on beans initialisation, such as AspectJ, will work on step
+definition classes - but not on the `@CucumberContextConfiguration` annotated
+class.
 
 For more information configuring Spring tests see:
  - [Spring Framework Documentation - Testing](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/testing.html)
@@ -52,7 +63,7 @@ For more information configuring Spring tests see:
 ### Configuring multiple Test Application Contexts
 
 Per execution Cucumber can only launch a single Test Application Contexts. To
-use multiple different application contexts Cucumber must be executed multiple
+use multiple different application contexts, Cucumber must be executed multiple
 times.
 
 #### JUnit 4 / TestNG
@@ -79,13 +90,13 @@ Repeat as needed.
 package com.example;
 
 import org.junit.platform.suite.api.ConfigurationParameter;
-import org.junit.platform.suite.api.SelectClasspathResource;
+import org.junit.platform.suite.api.SelectPackages;
 import org.junit.platform.suite.api.Suite;
 
 import static io.cucumber.junit.platform.engine.Constants.GLUE_PROPERTY_NAME;
 
 @Suite
-@SelectClasspathResource("com/example/application/one")
+@SelectPackages("com.example.application.one")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "com.example.application.one")
 public class ApplicationOneTest {
 
@@ -97,10 +108,14 @@ Repeat as needed.
 ## Accessing the application context
 
 Components from the application context can be accessed by autowiring.
-Annotate a field in your step definition class with `@Autowired`. 
+
+Either annotate a field in your step definition class with `@Autowired`
 
 ```java
 package com.example.app;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import io.cucumber.java.en.Given;
 
 public class MyStepDefinitions {
 
@@ -114,17 +129,83 @@ public class MyStepDefinitions {
 }
 ```
 
+Or declare a dependency through the constructor:
+
+```java
+package com.example.app;
+
+import io.cucumber.java.en.Given;
+
+public class MyStepDefinitions {
+    
+   private final MyService myService;
+   
+   public MyStepDefinitions(MyService myService){
+       this.myService = myService;
+   }
+
+   @Given("feed back is requested from my service")
+   public void feed_back_is_requested(){
+      myService.requestFeedBack();
+   }
+}
+```
+
+## Using Mock Beans
+
+To use mock beans, declare a mock bean in the context configuration.
+
+```java
+package com.example.app;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+
+import io.cucumber.spring.CucumberContextConfiguration;
+
+@CucumberContextConfiguration
+@SpringBootTest(classes = TestConfig.class)
+@MockBean(MyService.class)
+public class CucumberSpringConfiguration {
+   
+}
+```
+
+Then in your step definitions, use the mock as you would normally.
+
+```java
+package com.example.app;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import io.cucumber.java.en.Given;
+
+import static org.mockito.Mockito.mockingDetails;
+import static org.springframework.test.util.AssertionErrors.assertTrue;
+
+public class MyStepDefinitions {
+
+    @Autowired
+    private MyService myService;
+
+    @Given("my service is a mock")
+    public void feed_back_is_requested(){
+        assertTrue(mockingDetails(myService).isMock());
+    }
+}
+```
+
 ## Sharing State 
 
 Cucumber Spring creates an application context and uses Spring's
 `TestContextManager` framework internally. All scenarios as well as all other
-tests (e.g. JUnit) that use the same context configuration will share one
+tests (e.g., JUnit) that use the same context configuration will share one
 instance of the Spring application. This avoids an expensive startup time.
 
 ### Sharing state between steps
 
 To prevent sharing test state between scenarios, beans containing glue code
-(i.e. step definitions, hooks, ect) are bound to the `cucumber-glue` scope.
+(i.e., step definitions, hooks, ect) are bound to the `cucumber-glue` scope.
 
 The `cucumber-glue` scope starts prior to a scenario and ends after a scenario.
 All beans in this scope will be created before a scenario execution and
@@ -162,6 +243,9 @@ The glue scoped component can then be autowired into a step definition:
 ```java
 package com.example.app;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import io.cucumber.java.en.Given;
+
 public class UserStepDefinitions {
 
    @Autowired
@@ -194,9 +278,66 @@ public class PurchaseStepDefinitions {
 }
 ```
 
+#### Sharing state between threads
+
+By default, when using `@ScenarioScope` these beans must also be accessed on
+the same thread as the one that is executing the scenario. If you are certain
+your scenario scoped beans can only be accessed through step definitions you
+can use `@ScenarioScope(proxyMode = ScopedProxyMode.NO)`.
+
+
+```java
+package com.example.app;
+
+import org.springframework.stereotype.Component;
+import io.cucumber.spring.ScenarioScope;
+import org.springframework.context.annotation.ScopedProxyMode;
+
+@Component
+@ScenarioScope(proxyMode = ScopedProxyMode.NO)
+public class TestUserInformation {
+
+    private User testUser;
+
+    public void setTestUser(User testUser) {
+        this.testUser = testUser;
+    }
+
+    public User getTestUser() {
+        return testUser;
+    }
+
+}
+```
+
+```java
+package com.example.app;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import io.cucumber.java.en.Given;
+import org.awaitility.Awaitility;
+
+public class UserStepDefinitions {
+
+    @Autowired
+    private TestUserInformation testUserInformation;
+
+    @Then("the test user is eventually created")
+    public void a_user_is_eventually_created() {
+        Awaitility.await()
+                .untilAsserted(() -> {
+                    // This happens on a different thread
+                    TestUser testUser = testUserInformation.getTestUser();
+                    Optional<User> user = repository.findById(testUser.getId());
+                    assertTrue(user.isPresent());
+                });
+    }
+}
+```
+
 ### Dirtying the application context
 
-If your tests do dirty the application context you can add `@DirtiesContext` to 
+If your tests do dirty the application context, you can add `@DirtiesContext` to 
 your test configuration. 
 
 ```java
@@ -221,7 +362,7 @@ package com.example.app;
 public class MyStepDefinitions {
 
    @Autowired
-   private MyService myService;  // Each scenario have a new instance of MyService
+   private MyService myService;  // Each scenario will have a new instance of MyService
 
 }
 ```

@@ -1,8 +1,12 @@
 package io.cucumber.picocontainer;
 
 import org.picocontainer.Disposable;
+import org.picocontainer.Startable;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * A test helper class which simulates a class that holds system resources which
@@ -11,18 +15,21 @@ import java.util.List;
  * In a real app, this could be a database connector or similar.
  */
 public class DisposableCucumberBelly
-        implements Disposable {
+        implements Disposable, Startable {
+    static final List<String> events = new ArrayList<>();
 
     private List<String> contents;
     private boolean isDisposed = false;
+    private boolean wasStarted = false;
+    private boolean wasStopped = false;
 
     public List<String> getContents() {
-        assert !isDisposed;
+        assertFalse(isDisposed);
         return contents;
     }
 
     public void setContents(List<String> contents) {
-        assert !isDisposed;
+        assertFalse(isDisposed);
         this.contents = contents;
     }
 
@@ -33,6 +40,7 @@ public class DisposableCucumberBelly
      */
     @Override
     public void dispose() {
+        events.add("Disposed");
         isDisposed = true;
     }
 
@@ -40,4 +48,23 @@ public class DisposableCucumberBelly
         return isDisposed;
     }
 
+    @Override
+    public void start() {
+        events.add("Started");
+        wasStarted = true;
+    }
+
+    public boolean wasStarted() {
+        return wasStarted;
+    }
+
+    @Override
+    public void stop() {
+        events.add("Stopped");
+        wasStopped = true;
+    }
+
+    public boolean wasStopped() {
+        return wasStopped;
+    }
 }
