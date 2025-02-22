@@ -79,6 +79,8 @@ public class PluginOption implements Options.Plugin {
         incompatible.add("io.qameta.allure.cucumber2jvm.AllureCucumber2Jvm");
         incompatible.add("io.qameta.allure.cucumber3jvm.AllureCucumber3Jvm");
         incompatible.add("io.qameta.allure.cucumber4jvm.AllureCucumber4Jvm");
+        incompatible.add("io.qameta.allure.cucumber5jvm.AllureCucumber5Jvm");
+        incompatible.add("io.qameta.allure.cucumber6jvm.AllureCucumber6Jvm");
         INCOMPATIBLE_PLUGIN_CLASSES = unmodifiableSet(incompatible);
     }
 
@@ -123,7 +125,7 @@ public class PluginOption implements Options.Plugin {
             throw createPluginIsNotCompatible(pluginSpecification);
         }
 
-        // Replace IDEA plugin with TeamCity
+        // Replace IntelliJ IDEA plugin with TeamCity
         if (INCOMPATIBLE_INTELLIJ_IDEA_PLUGIN_CLASSES.contains(pluginName)) {
             log.debug(() -> "Incompatible IntelliJ IDEA Plugin detected. Falling back to teamcity plugin");
             return TeamCityPlugin.class;

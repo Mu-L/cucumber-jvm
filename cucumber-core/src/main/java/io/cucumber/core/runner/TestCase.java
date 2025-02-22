@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 import static io.cucumber.core.runner.ExecutionMode.DRY_RUN;
 import static io.cucumber.core.runner.ExecutionMode.RUN;
-import static io.cucumber.messages.TimeConversion.javaInstantToTimestamp;
+import static io.cucumber.messages.Convertor.toMessage;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 
@@ -161,7 +161,8 @@ final class TestCase implements io.cucumber.plugin.event.TestCase {
             getTestSteps()
                     .stream()
                     .map(this::createTestStep)
-                    .collect(toList())));
+                    .collect(toList()),
+            null));
         bus.send(envelope);
     }
 
@@ -208,7 +209,8 @@ final class TestCase implements io.cucumber.plugin.event.TestCase {
             0L,
             executionId.toString(),
             id.toString(),
-            javaInstantToTimestamp(start)));
+            Thread.currentThread().getName(),
+            toMessage(start)));
         bus.send(envelope);
     }
 
@@ -217,7 +219,7 @@ final class TestCase implements io.cucumber.plugin.event.TestCase {
     ) {
         bus.send(new TestCaseFinished(stop, this, result));
         Envelope envelope = Envelope.of(new io.cucumber.messages.types.TestCaseFinished(executionId.toString(),
-            javaInstantToTimestamp(stop), false));
+            toMessage(stop), false));
         bus.send(envelope);
     }
 

@@ -24,8 +24,9 @@ import java.util.ResourceBundle;
 import java.util.function.Consumer;
 
 import static io.cucumber.cienvironment.DetectCiEnvironment.detectCiEnvironment;
-import static io.cucumber.core.exception.ExceptionUtils.printStackTrace;
-import static io.cucumber.messages.TimeConversion.javaInstantToTimestamp;
+import static io.cucumber.core.exception.ExceptionUtils.throwAsUncheckedException;
+import static io.cucumber.core.exception.UnrecoverableExceptions.rethrowIfUnrecoverable;
+import static io.cucumber.messages.Convertor.toMessage;
 import static java.util.Collections.singletonList;
 
 public final class CucumberExecutionContext {
@@ -44,6 +45,11 @@ public final class CucumberExecutionContext {
         this.bus = bus;
         this.exitStatus = exitStatus;
         this.runnerSupplier = runnerSupplier;
+    }
+
+    @FunctionalInterface
+    public interface ThrowingRunnable {
+        void run() throws Throwable;
     }
 
     public void startTestRun() {
@@ -79,7 +85,7 @@ public final class CucumberExecutionContext {
         log.debug(() -> "Sending run test started event");
         start = bus.getInstant();
         bus.send(new TestRunStarted(start));
-        bus.send(Envelope.of(new io.cucumber.messages.types.TestRunStarted(javaInstantToTimestamp(start))));
+        bus.send(Envelope.of(new io.cucumber.messages.types.TestRunStarted(toMessage(start), null)));
     }
 
     public void runBeforeAllHooks() {
@@ -111,9 +117,10 @@ public final class CucumberExecutionContext {
         bus.send(new TestRunFinished(instant, result));
 
         io.cucumber.messages.types.TestRunFinished testRunFinished = new io.cucumber.messages.types.TestRunFinished(
-            exception != null ? printStackTrace(exception) : null,
+            exception != null ? exception.getMessage() : null,
             exception == null && exitStatus.isSuccess(),
-            javaInstantToTimestamp(instant));
+            toMessage(instant),
+            exception == null ? null : toMessage(exception), null);
         bus.send(Envelope.of(testRunFinished));
     }
 
@@ -131,6 +138,32 @@ public final class CucumberExecutionContext {
 
     private Runner getRunner() {
         return collector.executeAndThrow(runnerSupplier::get);
+    }
+
+    public void runFeatures(ThrowingRunnable executeFeatures) {
+        startTestRun();
+        execute(() -> {
+            runBeforeAllHooks();
+            executeFeatures.run();
+        });
+        try {
+            execute(this::runAfterAllHooks);
+        } finally {
+            finishTestRun();
+        }
+        Throwable throwable = getThrowable();
+        if (throwable != null) {
+            throwAsUncheckedException(throwable);
+        }
+    }
+
+    private void execute(ThrowingRunnable runnable) {
+        try {
+            runnable.run();
+        } catch (Throwable t) {
+            // Collected in CucumberExecutionContext
+            rethrowIfUnrecoverable(t);
+        }
     }
 
 }

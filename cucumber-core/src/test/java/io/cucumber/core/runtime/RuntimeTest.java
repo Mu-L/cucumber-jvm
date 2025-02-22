@@ -1,15 +1,19 @@
 package io.cucumber.core.runtime;
 
+import io.cucumber.core.backend.CucumberBackendException;
 import io.cucumber.core.backend.Glue;
 import io.cucumber.core.backend.HookDefinition;
 import io.cucumber.core.backend.ParameterInfo;
 import io.cucumber.core.backend.ScenarioScoped;
+import io.cucumber.core.backend.StaticHookDefinition;
 import io.cucumber.core.backend.StubStepDefinition;
 import io.cucumber.core.backend.TestCaseState;
 import io.cucumber.core.eventbus.EventBus;
 import io.cucumber.core.exception.CompositeCucumberException;
+import io.cucumber.core.exception.CucumberException;
 import io.cucumber.core.feature.TestFeatureParser;
 import io.cucumber.core.gherkin.Feature;
+import io.cucumber.core.gherkin.FeatureParserException;
 import io.cucumber.core.options.RuntimeOptionsBuilder;
 import io.cucumber.core.runner.StepDurationTimeService;
 import io.cucumber.core.runner.TestBackendSupplier;
@@ -125,6 +129,17 @@ class RuntimeTest {
         bus.send(testCaseFinishedWithStatus(Status.AMBIGUOUS));
 
         assertThat(runtime.exitStatus(), is(equalTo((byte) 0x1)));
+    }
+
+    @Test
+    void with_parse_error() {
+        Runtime runtime = Runtime.builder()
+                .withFeatureSupplier(() -> {
+                    throw new FeatureParserException("oops");
+                })
+                .build();
+
+        assertThrows(FeatureParserException.class, runtime::run);
     }
 
     @Test
@@ -355,6 +370,64 @@ class RuntimeTest {
     }
 
     @Test
+    void should_fail_on_event_listener_exception_at_test_run_started() {
+        RuntimeException expectedException = new RuntimeException("This exception is expected");
+        ConcurrentEventListener brokenEventListener = publisher -> publisher.registerHandlerFor(TestRunStarted.class,
+            (TestRunStarted event) -> {
+                throw expectedException;
+            });
+
+        Executable testMethod = () -> Runtime.builder()
+                .withFeatureSupplier(new StubFeatureSupplier())
+                .withAdditionalPlugins(brokenEventListener)
+                .build()
+                .run();
+        RuntimeException actualThrown = assertThrows(RuntimeException.class, testMethod);
+        assertThat(actualThrown, equalTo(expectedException));
+    }
+
+    @Test
+    void should_fail_on_event_listener_exception_at_test_run_finished() {
+        RuntimeException expectedException = new RuntimeException("This exception is expected");
+        ConcurrentEventListener brokenEventListener = publisher -> publisher.registerHandlerFor(TestRunFinished.class,
+            (TestRunFinished event) -> {
+                throw expectedException;
+            });
+
+        Executable testMethod = () -> Runtime.builder()
+                .withFeatureSupplier(new StubFeatureSupplier())
+                .withAdditionalPlugins(brokenEventListener)
+                .build()
+                .run();
+        RuntimeException actualThrown = assertThrows(RuntimeException.class, testMethod);
+        assertThat(actualThrown, equalTo(expectedException));
+    }
+
+    @Test
+    void should_fail_on_exception_invoking_after_all_hook() {
+        RuntimeException expectedException = new RuntimeException("This exception is expected");
+        CucumberBackendException backendException = new CucumberBackendException("failed", expectedException);
+        MockedStaticHookDefinition mockedStaticHookDefinition = new MockedStaticHookDefinition(() -> {
+            throw backendException;
+        });
+
+        BackendSupplier backendSupplier = new TestBackendSupplier() {
+            @Override
+            public void loadGlue(Glue glue, List<URI> gluePaths) {
+                glue.addAfterAllHook(mockedStaticHookDefinition);
+            }
+        };
+
+        Executable testMethod = () -> Runtime.builder()
+                .withFeatureSupplier(new StubFeatureSupplier())
+                .withBackendSupplier(backendSupplier)
+                .build()
+                .run();
+        CucumberException actualThrown = assertThrows(CucumberException.class, testMethod);
+        assertThat(actualThrown.getCause(), equalTo(backendException));
+    }
+
+    @Test
     void should_interrupt_waiting_plugins() throws InterruptedException {
         final Feature feature1 = TestFeatureParser.parse("path/test.feature", "" +
                 "Feature: feature name 1\n" +
@@ -525,6 +598,35 @@ class RuntimeTest {
             return "mocked scenario scoped step definition";
         }
 
+    }
+
+    private static class MockedStaticHookDefinition implements StaticHookDefinition {
+
+        private final Runnable runnable;
+
+        private MockedStaticHookDefinition(Runnable runnable) {
+            this.runnable = runnable;
+        }
+
+        @Override
+        public void execute() {
+            runnable.run();
+        }
+
+        @Override
+        public int getOrder() {
+            return 0;
+        }
+
+        @Override
+        public boolean isDefinedAt(StackTraceElement stackTraceElement) {
+            return false;
+        }
+
+        @Override
+        public String getLocation() {
+            return "mocked hook definition definition";
+        }
     }
 
     private static class FormatterSpy implements EventListener {

@@ -1,7 +1,6 @@
 package io.cucumber.core.options;
 
 import io.cucumber.core.exception.CucumberException;
-import io.cucumber.core.feature.FeatureWithLines;
 import io.cucumber.core.feature.GluePath;
 import io.cucumber.core.logging.Logger;
 import io.cucumber.core.logging.LoggerFactory;
@@ -17,8 +16,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.URI;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -53,12 +50,13 @@ import static io.cucumber.core.cli.CommandlineOptions.SNIPPETS;
 import static io.cucumber.core.cli.CommandlineOptions.TAGS;
 import static io.cucumber.core.cli.CommandlineOptions.TAGS_SHORT;
 import static io.cucumber.core.cli.CommandlineOptions.THREADS;
+import static io.cucumber.core.cli.CommandlineOptions.UUID_GENERATOR;
 import static io.cucumber.core.cli.CommandlineOptions.VERSION;
 import static io.cucumber.core.cli.CommandlineOptions.VERSION_SHORT;
 import static io.cucumber.core.cli.CommandlineOptions.WIP;
 import static io.cucumber.core.cli.CommandlineOptions.WIP_SHORT;
 import static io.cucumber.core.options.ObjectFactoryParser.parseObjectFactory;
-import static io.cucumber.core.options.OptionsFileParser.parseFeatureWithLinesFile;
+import static io.cucumber.core.options.UuidGeneratorParser.parseUuidGenerator;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.joining;
@@ -167,19 +165,18 @@ public final class CommandlineOptionsParser {
             } else if (arg.equals(OBJECT_FACTORY)) {
                 String objectFactoryClassName = removeArgFor(arg, args);
                 parsedOptions.setObjectFactoryClass(parseObjectFactory(objectFactoryClassName));
+            } else if (arg.equals(UUID_GENERATOR)) {
+                String uuidGeneratorClassName = removeArgFor(arg, args);
+                parsedOptions.setUuidGeneratorClass(parseUuidGenerator(uuidGeneratorClassName));
             } else if (arg.startsWith("-")) {
                 out.println("Unknown option: " + arg);
                 printUsage();
                 exitCode = 1;
                 return parsedOptions;
             } else if (!arg.isEmpty()) {
-                if (arg.startsWith("@")) {
-                    Path rerunFile = Paths.get(arg.substring(1));
-                    parsedOptions.addRerun(parseFeatureWithLinesFile(rerunFile));
-                } else {
-                    FeatureWithLines featureWithLines = FeatureWithLines.parse(arg);
-                    parsedOptions.addFeature(featureWithLines);
-                }
+                FeatureWithLinesOrRerunPath parsed = FeatureWithLinesOrRerunPath.parse(arg);
+                parsed.getFeaturesToRerun().ifPresent(parsedOptions::addRerun);
+                parsed.getFeatureWithLines().ifPresent(parsedOptions::addFeature);
             }
         }
 

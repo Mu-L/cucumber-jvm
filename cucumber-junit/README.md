@@ -1,7 +1,9 @@
 Cucumber JUnit 
 ==============
 
-Use JUnit to execute cucumber scenarios. To use add the `cucumber-junit`
+_For JUnit 5 use the [Cucumber JUnit Platform Engine](../cucumber-junit-platform-engine)_
+
+Use JUnit 4 to execute Cucumber scenarios. To use add the `cucumber-junit`
 dependency to your pom.xml:
 
 ```xml
@@ -32,29 +34,28 @@ public class RunCucumberTest {
 }
 ```
 
-This will execute all scenarios in the same package as the runner; by default glue
-code is also assumed to be in the same 
-package. The `@CucumberOptions` can be used to provide
+This will execute all scenarios in the same package as the runner; by default, glue
+code is also assumed to be in the same package. The `@CucumberOptions` can be used to provide
 [additional configuration](https://docs.cucumber.io/cucumber/api/#list-configuration-options) 
 to the runner. 
 
 ## Using JUnit Rules ##
 
 Cucumber supports JUnit's `@ClassRule`, `@BeforeClass`, and `@AfterClass`
-annotations. These will be executed before and
+annotations. These will be executed before and 
 after all scenarios. Using these is not recommended as it limits portability
 between different runners; they may not
 execute correctly when using the command line, [IntelliJ IDEA](https://www.jetbrains.com/help/idea/cucumber.html), or
-[Cucumber-Eclipse](https://github.com/cucumber/cucumber-eclipse). Instead it is
-recommended to [use Cucumber's hooks](../java#beforeall--afterall).
+[Cucumber-Eclipse](https://github.com/cucumber/cucumber-eclipse). Instead, it is
+recommended to [use Cucumber's hooks](../cucumber-java#beforeall--afterall).
 
 ## Using other JUnit features ##
 
-The Cucumber runner acts like a suite of a JUnit tests. As such other JUnit
+The Cucumber runner acts like a suite of JUnit tests. As such, other JUnit
 features like custom JUnit
 Listeners and Reporters can all be expected to work.
 
-For more information on JUnit, see the [JUnit web site](http://www.junit.org).
+For more information on JUnit, see the [JUnit website](http://www.junit.org).
 
 ## Assume ## 
 
@@ -78,7 +79,7 @@ skipped.
 ## Parallel Execution with Maven ##
 
 Cucumber JUnit supports parallel execution of feature files across multiple 
-threads. To enable this with maven set the `parallel` property to either
+threads. To enable this with Maven, set the `parallel` property to either
 `methods` or `both`.
 
 ```xml

@@ -1,11 +1,14 @@
 package io.cucumber.junit.platform.engine;
 
+import io.cucumber.core.backend.DefaultObjectFactory;
+import io.cucumber.core.eventbus.IncrementingUuidGenerator;
 import io.cucumber.core.plugin.Options;
 import io.cucumber.core.snippets.SnippetType;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.engine.ConfigurationParameters;
 
 import java.net.URI;
+import java.util.Map;
 
 import static java.util.stream.Collectors.toList;
 import static org.hamcrest.CoreMatchers.is;
@@ -58,7 +61,7 @@ class CucumberEngineOptionsTest {
         assertThat(new CucumberEngineOptions(config).plugins().stream()
                 .map(Options.Plugin::pluginString)
                 .collect(toList()),
-            hasItem("io.cucumber.core.plugin.NoPublishFormatter"));
+            empty());
     }
 
     @Test
@@ -81,6 +84,18 @@ class CucumberEngineOptionsTest {
                 .map(Options.Plugin::pluginString)
                 .collect(toList()),
             hasItem("io.cucumber.core.plugin.PublishFormatter"));
+    }
+
+    @Test
+    void getPluginNamesWithPublishDisabledAndPublishToken() {
+        ConfigurationParameters config = new MapConfigurationParameters(Map.of(
+            Constants.PLUGIN_PUBLISH_ENABLED_PROPERTY_NAME, "false",
+            Constants.PLUGIN_PUBLISH_TOKEN_PROPERTY_NAME, "some/token"));
+
+        assertThat(new CucumberEngineOptions(config).plugins().stream()
+                .map(Options.Plugin::pluginString)
+                .collect(toList()),
+            empty());
     }
 
     @Test
@@ -149,7 +164,25 @@ class CucumberEngineOptionsTest {
         ConfigurationParameters absent = new MapConfigurationParameters(
             "some key", "some value");
         assertFalse(new CucumberEngineOptions(absent).isParallelExecutionEnabled());
-
     }
 
+    @Test
+    void objectFactory() {
+        ConfigurationParameters configurationParameters = new MapConfigurationParameters(
+            Constants.OBJECT_FACTORY_PROPERTY_NAME,
+            DefaultObjectFactory.class.getName());
+
+        assertThat(new CucumberEngineOptions(configurationParameters).getObjectFactoryClass(),
+            is(DefaultObjectFactory.class));
+    }
+
+    @Test
+    void uuidGenerator() {
+        ConfigurationParameters configurationParameters = new MapConfigurationParameters(
+            Constants.UUID_GENERATOR_PROPERTY_NAME,
+            IncrementingUuidGenerator.class.getName());
+
+        assertThat(new CucumberEngineOptions(configurationParameters).getUuidGeneratorClass(),
+            is(IncrementingUuidGenerator.class));
+    }
 }

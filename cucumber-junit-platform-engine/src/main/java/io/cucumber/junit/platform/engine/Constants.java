@@ -7,6 +7,7 @@ import org.junit.platform.engine.support.hierarchical.ParallelExecutionConfigura
 
 import static org.junit.platform.engine.support.hierarchical.DefaultParallelExecutionConfigurationStrategy.CONFIG_CUSTOM_CLASS_PROPERTY_NAME;
 import static org.junit.platform.engine.support.hierarchical.DefaultParallelExecutionConfigurationStrategy.CONFIG_DYNAMIC_FACTOR_PROPERTY_NAME;
+import static org.junit.platform.engine.support.hierarchical.DefaultParallelExecutionConfigurationStrategy.CONFIG_FIXED_MAX_POOL_SIZE_PROPERTY_NAME;
 import static org.junit.platform.engine.support.hierarchical.DefaultParallelExecutionConfigurationStrategy.CONFIG_FIXED_PARALLELISM_PROPERTY_NAME;
 import static org.junit.platform.engine.support.hierarchical.DefaultParallelExecutionConfigurationStrategy.CONFIG_STRATEGY_PROPERTY_NAME;
 
@@ -42,22 +43,37 @@ public final class Constants {
     public static final String EXECUTION_EXCLUSIVE_RESOURCES_TAG_TEMPLATE_VARIABLE = "<tag-name>";
 
     /**
-     * Property name used to set feature location: {@value}
+     * Property name used to select features: {@value}
      * <p>
-     * A comma separated list of:
+     * A comma separated list of feature paths. A feature path is constructed as
+     * {@code  [ PATH[.feature[:LINE]*] | URI[.feature[:LINE]*] }
+     * <p>
+     * Examples:
      * <ul>
-     * <li>{@code path/to/dir} - Load the files with the extension ".feature"
-     * for the directory {@code path} and its sub directories.
-     * <li>{@code path/name.feature} - Load the feature file
-     * {@code path/name.feature} from the file system.</li>
-     * <li>{@code classpath:path/name.feature} - Load the feature file
-     * {@code path/name.feature} from the classpath.</li>
-     * <li>{@code path/name.feature:3:9} - Load the scenarios on line 3 and line
-     * 9 in the file {@code path/name.feature}.</li>
+     * <li>{@code src/test/resources/features} -- All features in the
+     * {@code src/test/resources/features} directory</li>
+     * <li>{@code classpath:com/example/application} -- All features in the
+     * {@code com.example.application} package</li>
+     * <li>{@code in-memory:/features} -- All features in the {@code /features}
+     * directory on an in memory file system supported by
+     * {@link java.nio.file.FileSystems}</li>
+     * <li>{@code src/test/resources/features/example.feature:42} -- The
+     * scenario or example at line 42 in the example feature file</li>
      * </ul>
      * <p>
-     * NOTE: When used any discovery selectors from the JUnit Platform will be
-     * ignored. Use with caution and care.
+     * Note: When used, any discovery selectors from the JUnit Platform will be
+     * ignored. This may lead to multiple executions of Cucumber. For example
+     * when used in combination with the JUnit Platform Suite Engine.
+     * <p>
+     * When using Cucumber through the JUnit Platform Launcher API or the JUnit
+     * Platform Suite Engine, it is recommended to either use the
+     * {@link org.junit.platform.engine.discovery.DiscoverySelectors} or
+     * annotations from {@link org.junit.platform.suite.api} respectively.
+     * <p>
+     * Additionally, when this property is used, to work around limitations in
+     * Maven Surefire and Gradle, the Cucumber Engine will report its
+     * {@link org.junit.platform.engine.TestSource} as
+     * {@link CucumberTestEngine}.
      *
      * @see io.cucumber.core.feature.FeatureWithLines
      */
@@ -124,6 +140,44 @@ public final class Constants {
     public static final String JUNIT_PLATFORM_NAMING_STRATEGY_PROPERTY_NAME = "cucumber.junit-platform.naming-strategy";
 
     /**
+     * Property name used to configure the naming strategy of examples in case
+     * of short naming strategy: {@value}
+     * <p>
+     * Value must be one of {@code number} or {@code pickle}. By default,
+     * numbers are used.
+     * <p>
+     * When set to {@code pickle} the pickle name is used. So for scenario name
+     * {@code Adding <a> and <b>} and example with params {@code a = 10} and
+     * {@code b = 20} the following name would be produced:
+     * {@code Adding 10 and 20}.
+     * <p>
+     * Using example numbers works well in all scenarios, but if parameterized
+     * scenario names are used consistently, the pickle name provides more
+     * clarity.
+     */
+    @API(status = Status.EXPERIMENTAL, since = "7.16.2")
+    public static final String JUNIT_PLATFORM_SHORT_NAMING_STRATEGY_EXAMPLE_NAME_PROPERTY_NAME = "cucumber.junit-platform.naming-strategy.short.example-name";
+
+    /**
+     * Property name used to configure the naming strategy of examples in case
+     * of long naming strategy: {@value}
+     * <p>
+     * Value must be one of {@code number} or {@code pickle}. By default,
+     * numbers are used.
+     * <p>
+     * When set to {@code pickle} the pickle name is used. So for scenario name
+     * {@code Adding <a> and <b>} and example with params {@code a = 10} and
+     * {@code b = 20} the following name would be produced:
+     * {@code Feature Name - Rule Name - Adding <a> and <b> - Examples Name - Adding 10 and 20}.
+     * <p>
+     * Using example numbers works well in all scenarios, but if parameterized
+     * scenario names are used consistently, the pickle name provides more
+     * clarity.
+     */
+    @API(status = Status.EXPERIMENTAL, since = "7.16.2")
+    public static final String JUNIT_PLATFORM_LONG_NAMING_STRATEGY_EXAMPLE_NAME_PROPERTY_NAME = "cucumber.junit-platform.naming-strategy.long.example-name";
+
+    /**
      * Property name to enable plugins: {@value}
      * <p>
      * A comma separated list of {@code [PLUGIN[:PATH_OR_URL]]} e.g:
@@ -173,6 +227,16 @@ public final class Constants {
     public static final String OBJECT_FACTORY_PROPERTY_NAME = io.cucumber.core.options.Constants.OBJECT_FACTORY_PROPERTY_NAME;
 
     /**
+     * Property name to select custom UUID generator implementation: {@value}
+     * <p>
+     * By default, if a single UUID generator is available on the class path
+     * that object factory will be used, or more than one UUID generator and the
+     * #RandomUuidGenerator are available on the classpath, the
+     * #RandomUuidGenerator will be used.
+     */
+    public static final String UUID_GENERATOR_PROPERTY_NAME = io.cucumber.core.options.Constants.UUID_GENERATOR_PROPERTY_NAME;
+
+    /**
      * Property name to control naming convention for generated snippets:
      * {@value}
      * <p>
@@ -181,6 +245,21 @@ public final class Constants {
      * By defaults are generated using the under score naming convention.
      */
     public static final String SNIPPET_TYPE_PROPERTY_NAME = io.cucumber.core.options.Constants.SNIPPET_TYPE_PROPERTY_NAME;
+
+    /**
+     * Property name used to set the executing thread for all scenarios and
+     * examples in a feature: {@value}
+     * <p>
+     * Valid values are {@code same_thread} or {@code concurrent}. Default value
+     * is {@code concurrent}.
+     * <p>
+     * When parallel execution is enabled, scenarios are executed in parallel on
+     * any available thread. setting this property to {@code same_thread}
+     * executes scenarios sequentially in the same thread as the parent feature.
+     *
+     * @see #PARALLEL_EXECUTION_ENABLED_PROPERTY_NAME
+     */
+    public static final String EXECUTION_MODE_FEATURE_PROPERTY_NAME = "cucumber.execution.execution-mode.feature";
 
     /**
      * Property name used to enable parallel test execution: {@value}
@@ -200,14 +279,14 @@ public final class Constants {
      * This maps a tag to a resource with a read-write lock.
      * <p>
      * For example given these properties:
-     * 
+     *
      * <pre>
      *  {@code
      * cucumber.execution.exclusive-resources.my-tag-ab-rw.read-write=resource-a,resource-b
      * cucumber.execution.exclusive-resources.my-tag-a-r.read=resource-a
      * }
      * </pre>
-     * 
+     * <p>
      * A scenario tagged with {@code @my-tag-ab-rw} will lock resource {@code a}
      * and {@code b} for reading and writing and will not be concurrently
      * executed with other scenarios tagged with {@code @my-tag-ab-rw} as well
@@ -256,6 +335,19 @@ public final class Constants {
      */
     public static final String PARALLEL_CONFIG_FIXED_PARALLELISM_PROPERTY_NAME = PARALLEL_CONFIG_PREFIX
             + CONFIG_FIXED_PARALLELISM_PROPERTY_NAME;
+    /**
+     * Property name used to determine the maximum pool size for the
+     * {@link DefaultParallelExecutionConfigurationStrategy#FIXED} configuration
+     * strategy: {@value}
+     * <p>
+     * Value must be an integer and greater than or equal to
+     * {@value #PARALLEL_CONFIG_FIXED_PARALLELISM_PROPERTY_NAME}; defaults to
+     * {@code 256 + fixed.parallelism}.
+     *
+     * @see DefaultParallelExecutionConfigurationStrategy#FIXED
+     */
+    public static final String PARALLEL_CONFIG_FIXED_MAX_POOL_SIZE_PROPERTY_NAME = PARALLEL_CONFIG_PREFIX
+            + CONFIG_FIXED_MAX_POOL_SIZE_PROPERTY_NAME;
 
     /**
      * Property name of the factor used to determine the desired parallelism for

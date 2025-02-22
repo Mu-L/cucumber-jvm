@@ -16,7 +16,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
 
-import static io.cucumber.core.plugin.BytesEqualTo.isBytesEqualTo;
+import static io.cucumber.core.plugin.Bytes.bytes;
+import static io.cucumber.core.plugin.IsEqualCompressingLineSeparators.equalCompressingLineSeparators;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -45,7 +46,8 @@ class UnusedStepsSummaryPrinterTest {
         bus.send(new TestRunFinished(bus.getInstant(), new Result(Status.PASSED, Duration.ZERO, null)));
 
         // Verify produced output
-        assertThat(out, isBytesEqualTo("1 Unused steps:\n" + "my/tummy.feature:5 # some more cukes\n"));
+        assertThat(out,
+            bytes(equalCompressingLineSeparators("1 Unused steps:\n" + "my/tummy.feature:5 # some more cukes\n")));
     }
 
     private static StepDefinition mockStepDef(String location, String pattern) {

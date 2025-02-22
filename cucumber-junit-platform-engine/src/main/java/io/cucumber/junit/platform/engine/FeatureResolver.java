@@ -1,5 +1,6 @@
 package io.cucumber.junit.platform.engine;
 
+import io.cucumber.core.eventbus.UuidGenerator;
 import io.cucumber.core.feature.FeatureIdentifier;
 import io.cucumber.core.feature.FeatureParser;
 import io.cucumber.core.feature.FeatureWithLines;
@@ -9,6 +10,11 @@ import io.cucumber.core.logging.Logger;
 import io.cucumber.core.logging.LoggerFactory;
 import io.cucumber.core.resource.ClassLoaders;
 import io.cucumber.core.resource.ResourceScanner;
+import io.cucumber.core.runtime.UuidGeneratorServiceLoader;
+import io.cucumber.junit.platform.engine.NodeDescriptor.ExamplesDescriptor;
+import io.cucumber.junit.platform.engine.NodeDescriptor.PickleDescriptor;
+import io.cucumber.junit.platform.engine.NodeDescriptor.RuleDescriptor;
+import io.cucumber.junit.platform.engine.NodeDescriptor.ScenarioOutlineDescriptor;
 import io.cucumber.plugin.event.Node;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.TestDescriptor;
@@ -24,8 +30,8 @@ import org.junit.platform.engine.discovery.UriSelector;
 
 import java.net.URI;
 import java.util.List;
-import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static java.util.Comparator.comparing;
@@ -34,11 +40,7 @@ final class FeatureResolver {
 
     private static final Logger log = LoggerFactory.getLogger(FeatureResolver.class);
 
-    private final FeatureParser featureParser = new FeatureParser(UUID::randomUUID);
-    private final ResourceScanner<Feature> featureScanner = new ResourceScanner<>(
-        ClassLoaders::getDefaultClassLoader,
-        FeatureIdentifier::isFeature,
-        featureParser::parseResource);
+    private final ResourceScanner<Feature> featureScanner;
 
     private final CucumberEngineDescriptor engineDescriptor;
     private final Predicate<String> packageFilter;
@@ -52,7 +54,21 @@ final class FeatureResolver {
         this.parameters = parameters;
         this.engineDescriptor = engineDescriptor;
         this.packageFilter = packageFilter;
-        this.namingStrategy = new CucumberEngineOptions(parameters).namingStrategy();
+        CucumberEngineOptions options = new CucumberEngineOptions(parameters);
+        this.namingStrategy = options.namingStrategy();
+        CachingFeatureParser featureParser = createFeatureParser(options);
+        this.featureScanner = new ResourceScanner<>(
+            ClassLoaders::getDefaultClassLoader,
+            FeatureIdentifier::isFeature,
+            featureParser::parseResource);
+    }
+
+    private static CachingFeatureParser createFeatureParser(CucumberEngineOptions options) {
+        Supplier<ClassLoader> classLoader = FeatureResolver.class::getClassLoader;
+        UuidGeneratorServiceLoader uuidGeneratorServiceLoader = new UuidGeneratorServiceLoader(classLoader, options);
+        UuidGenerator uuidGenerator = uuidGeneratorServiceLoader.loadUuidGenerator();
+        FeatureParser featureParser = new FeatureParser(uuidGenerator::generateId);
+        return new CachingFeatureParser(featureParser);
     }
 
     static FeatureResolver create(
@@ -85,7 +101,8 @@ final class FeatureResolver {
                 source.featureSource(),
                 feature),
             (Node.Rule node, TestDescriptor parent) -> {
-                TestDescriptor descriptor = new NodeDescriptor(
+                TestDescriptor descriptor = new RuleDescriptor(
+                    parameters,
                     source.ruleSegment(parent.getUniqueId(), node),
                     namingStrategy.name(node),
                     source.nodeSource(node));
@@ -103,7 +120,8 @@ final class FeatureResolver {
                 return descriptor;
             },
             (Node.ScenarioOutline node, TestDescriptor parent) -> {
-                TestDescriptor descriptor = new NodeDescriptor(
+                TestDescriptor descriptor = new ScenarioOutlineDescriptor(
+                    parameters,
                     source.scenarioSegment(parent.getUniqueId(), node),
                     namingStrategy.name(node),
                     source.nodeSource(node));
@@ -111,7 +129,8 @@ final class FeatureResolver {
                 return descriptor;
             },
             (Node.Examples node, TestDescriptor parent) -> {
-                NodeDescriptor descriptor = new NodeDescriptor(
+                NodeDescriptor descriptor = new ExamplesDescriptor(
+                    parameters,
                     source.examplesSegment(parent.getUniqueId(), node),
                     namingStrategy.name(node),
                     source.nodeSource(node));
@@ -123,7 +142,7 @@ final class FeatureResolver {
                 PickleDescriptor descriptor = new PickleDescriptor(
                     parameters,
                     source.exampleSegment(parent.getUniqueId(), node),
-                    namingStrategy.name(node),
+                    namingStrategy.nameExample(node, pickle),
                     source.nodeSource(node),
                     pickle);
                 parent.addChild(descriptor);
@@ -207,16 +226,20 @@ final class FeatureResolver {
         Predicate<TestDescriptor> keepTestWithSelectedId = testDescriptor -> uniqueId
                 .equals(testDescriptor.getUniqueId());
 
+        List<UniqueId.Segment> resolvedSegments = engineDescriptor.getUniqueId().getSegments();
+
         uniqueId.getSegments()
                 .stream()
+                .skip(resolvedSegments.size())
+                .findFirst()
                 .filter(FeatureOrigin::isFeatureSegment)
                 .map(UniqueId.Segment::getValue)
                 .map(URI::create)
-                .flatMap(this::resolveUri)
-                .forEach(featureDescriptor -> {
+                .map(this::resolveUri)
+                .ifPresent(featureDescriptors -> featureDescriptors.forEach(featureDescriptor -> {
                     featureDescriptor.prune(keepTestWithSelectedId);
                     engineDescriptor.mergeFeature(featureDescriptor);
-                });
+                }));
     }
 
     private Stream<FeatureDescriptor> resolveUri(URI uri) {
